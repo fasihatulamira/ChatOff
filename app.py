@@ -10,6 +10,10 @@ import ollama
 # Import messagebox for popup error messages
 from tkinter import messagebox  
 
+# Import login window and database initialiser
+from auth import init_db
+from login import LoginWindow
+
 
 # Set UI theme to Dark mode
 ctk.set_appearance_mode("Dark")
@@ -27,8 +31,12 @@ class OfflineChatbot(ctk.CTk):
         # Set window title
         self.title("Offline Chatbot 🤖")
 
-        # Set window size
-        self.geometry("800x600")
+        # Auto fullscreen: detect screen resolution and fill it
+        self.update_idletasks()
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        self.geometry(f"{screen_w}x{screen_h}+0+0")
+        self.state("zoomed")  # also maximise for taskbar-aware platforms
 
 
         # Configure grid layout (for responsive resizing)
@@ -233,5 +241,9 @@ class OfflineChatbot(ctk.CTk):
 
 # ===== RUN APP =====
 if __name__ == "__main__":
-    app = OfflineChatbot()  # create app
-    app.mainloop()          # start GUI loop
+    # Ensure the users table exists before anything opens
+    init_db()
+
+    # Launch the Login window first; it will open the chatbot on success
+    login = LoginWindow()
+    login.mainloop()

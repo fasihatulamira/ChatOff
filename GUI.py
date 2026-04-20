@@ -333,6 +333,7 @@ class ChatFrame(ctk.CTkFrame):
             
             full = "".join(collected)
             save_message(self.controller.username, self.current_session_id, "bot", full, model)
+            self.controller.after(0, lambda: (self.chat_area.configure(state="normal"), self.chat_area.insert("end", "\n\n"), self.chat_area.configure(state="disabled")))
             self.controller.after(0, lambda: self.sidebar.refresh_sessions())
 
             # If it's the first message, generate a catchy title in the background
@@ -363,7 +364,11 @@ class ChatFrame(ctk.CTkFrame):
 
     def _append_chat(self, sender, message):
         self.chat_area.configure(state="normal")
-        self.chat_area.insert("end", f"{sender}: {message}\n\n")
+        # Ensure we start on a new line if there is already content
+        if self.chat_area.get("1.0", "end-1c").strip():
+            self.chat_area.insert("end", "\n")
+        self.chat_area.insert("end", f"{sender}: ", "bold")
+        self.chat_area.insert("end", f"{message}\n\n")
         self.chat_area.configure(state="disabled")
         self.chat_area.see("end")
 

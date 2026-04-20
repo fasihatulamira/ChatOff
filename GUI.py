@@ -193,12 +193,15 @@ class OfflineChatbot(ctk.CTk):
 
         self.title("ChatOff AI 🤖")
 
-        # Auto fullscreen: detect screen resolution and fill it
+        # Focused startup size: center on screen
+        win_w, win_h = 1100, 800
         self.update_idletasks()
-        screen_w = self.winfo_screenwidth()
-        screen_h = self.winfo_screenheight()
-        self.geometry(f"{screen_w}x{screen_h}+0+0")
-        self.state("zoomed")  # also maximise for taskbar-aware platforms
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        x  = (sw - win_w) // 2
+        y  = (sh - win_h) // 2
+        self.geometry(f"{win_w}x{win_h}+{x}+{y}")
+        self.minsize(800, 600)   # allow resizing but set a reasonable floor
 
         # Grid layout
         self.grid_columnconfigure(1, weight=1)

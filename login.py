@@ -24,31 +24,24 @@ def _make_field(parent, label_text: str, placeholder: str, show: str = "") -> ct
 
 
 # ─────────────────────────────────────────────
-#  SIGN-UP WINDOW
+#  SIGN-UP FRAME
 # ─────────────────────────────────────────────
-class SignUpWindow(ctk.CTkToplevel):
+class SignUpFrame(ctk.CTkFrame):
     """
-    Modal window that collects new-user details:
+    Frame that collects new-user details:
       full name · username · email · password · confirm password
     """
 
-    def __init__(self, parent):
-        super().__init__(parent)
-
-        self.title("ChatOff — Create Account")
-        self.geometry("480x620")
-        self.resizable(False, False)
-
-        # Keep on top of login window
-        self.grab_set()
-        self.transient(parent)
+    def __init__(self, parent, controller):
+        super().__init__(parent, fg_color="transparent")
+        self.controller = controller
 
         # ── Header ──────────────────────────────
         ctk.CTkLabel(self, text="🚀  Create Account",
-                     font=ctk.CTkFont(size=26, weight="bold")).pack(pady=(30, 4))
+                     font=ctk.CTkFont(size=26, weight="bold")).pack(pady=(20, 2))
         ctk.CTkLabel(self, text="Join ChatOff and start chatting offline",
                      font=ctk.CTkFont(size=13),
-                     text_color="gray").pack(pady=(0, 10))
+                     text_color="gray").pack(pady=(0, 6))
 
         # ── Form fields ─────────────────────────
         self.full_name_entry  = _make_field(self, "Full Name",        "e.g. Alice Smith")
@@ -63,20 +56,21 @@ class SignUpWindow(ctk.CTkToplevel):
         # ── Error label ─────────────────────────
         self.error_label = ctk.CTkLabel(self, text="", text_color="#FF6B6B",
                                         font=ctk.CTkFont(size=12), wraplength=380)
-        self.error_label.pack(pady=(10, 0))
+        self.error_label.pack(pady=(6, 0))
 
         # ── Buttons ─────────────────────────────
         ctk.CTkButton(self, text="Create Account",
                       height=44, corner_radius=10,
                       font=ctk.CTkFont(size=14, weight="bold"),
-                      command=self._submit).pack(fill="x", padx=40, pady=(14, 6))
+                      command=self._submit).pack(fill="x", padx=40, pady=(10, 4))
 
-        ctk.CTkButton(self, text="← Back to Login",
+        # Divider or Link back
+        ctk.CTkButton(self, text="Already have an account? Login",
                       height=36, corner_radius=10,
                       fg_color="transparent",
                       border_width=1,
                       font=ctk.CTkFont(size=13),
-                      command=self.destroy).pack(fill="x", padx=40, pady=(0, 20))
+                      command=lambda: controller.show_frame(LoginFrame)).pack(fill="x", padx=40, pady=(0, 20))
 
     # ── Submit handler ──────────────────────────
     def _submit(self):
@@ -99,9 +93,8 @@ class SignUpWindow(ctk.CTkToplevel):
         ok, msg = register_user(full_name, username, email, password)
         if ok:
             messagebox.showinfo("Account Created",
-                                f"Welcome, {full_name}! 🎉\nYou can now log in.",
-                                parent=self)
-            self.destroy()  # Close sign-up → user goes back to login
+                                f"Welcome, {full_name}! 🎉\nYou can now log in.")
+            self.controller.show_frame(LoginFrame)
         else:
             self._show_error(f"⚠  {msg}")
 
@@ -110,39 +103,97 @@ class SignUpWindow(ctk.CTkToplevel):
 
 
 # ─────────────────────────────────────────────
-#  LOGIN WINDOW
+#  LOGIN FRAME
+# ─────────────────────────────────────────────
+class LoginFrame(ctk.CTkFrame):
+    """
+    Frame for user login.
+    """
+
+    def __init__(self, parent, controller):
+        super().__init__(parent, fg_color="transparent")
+        self.controller = controller
+
+        ctk.CTkLabel(self, text="Welcome back 👋",
+                     font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(24, 4))
+        ctk.CTkLabel(self, text="Log in to continue",
+                     font=ctk.CTkFont(size=13), text_color="gray").pack(pady=(0, 10))
+
+        self.username_entry = _make_field(self, "Username", "Enter your username")
+        self.password_entry = _make_field(self, "Password", "Enter your password", show="•")
+
+        # Allow Enter key to submit
+        self.password_entry.bind("<Return>", lambda e: self._login())
+
+        # ── Error label ─────────────────────────
+        self.error_label = ctk.CTkLabel(self, text="", text_color="#FF6B6B",
+                                        font=ctk.CTkFont(size=12), wraplength=340)
+        self.error_label.pack(pady=(6, 0))
+
+        # ── Login button ─────────────────────────
+        ctk.CTkButton(self, text="Login",
+                      height=44, corner_radius=10,
+                      font=ctk.CTkFont(size=14, weight="bold"),
+                      command=self._login).pack(fill="x", padx=40, pady=(14, 6))
+
+        # ── Divider ───────────────────────────────────
+        ctk.CTkLabel(self, text="─────  or  ─────",
+                     font=ctk.CTkFont(size=12), text_color="gray").pack(pady=4)
+
+        # ── Sign-up button ────────────────────────
+        ctk.CTkButton(self, text="✨  Don't have an account? Sign Up",
+                      height=44, corner_radius=10,
+                      fg_color=("#0097A7", "#006064"),
+                      hover_color=("#00838F", "#004D40"),
+                      text_color="white",
+                      font=ctk.CTkFont(size=13, weight="bold"),
+                      command=lambda: controller.show_frame(SignUpFrame)).pack(fill="x", padx=40, pady=(0, 20))
+
+    # ── Login handler ────────────────────────────
+    def _login(self):
+        username = self.username_entry.get().strip()
+        password = self.password_entry.get()
+
+        ok, result = login_user(username, password)
+        if ok:
+            self.controller.logged_in_user     = result    # result is full_name on success
+            self.controller.logged_in_username = username  # keep the login handle for DB lookups
+            self.controller._launch_chatbot()
+        else:
+            self._show_error(f"⚠  {result}")
+
+    def _show_error(self, text: str):
+        self.error_label.configure(text=text)
+
+
+# ─────────────────────────────────────────────
+#  LOGIN WINDOW (Main Container)
 # ─────────────────────────────────────────────
 class LoginWindow(ctk.CTk):
     """
-    Main entry-point window.
-    On successful login it destroys itself and launches OfflineChatbot.
+    Main entry-point window that swaps between Login and Sign Up frames.
     """
 
     def __init__(self):
         super().__init__()
 
         self.title("ChatOff — Login")
-        self.resizable(True, True)   # allow maximize button
+        self.resizable(True, True)
 
         # Auto-size and center on screen
-        win_w, win_h = 480, 660
+        win_w, win_h = 480, 680
         self.update_idletasks()
         sw = self.winfo_screenwidth()
         sh = self.winfo_screenheight()
         x  = (sw - win_w) // 2
         y  = (sh - win_h) // 2
         self.geometry(f"{win_w}x{win_h}+{x}+{y}")
-        self.minsize(420, 620)   # prevent content from being cut off
+        self.minsize(420, 620)
 
-        # Store the logged-in user's name to pass to the chatbot
         self.logged_in_user: str = ""
-        self.logged_in_username: str = ""   # DB lookup handle
+        self.logged_in_username: str = ""
 
-        self._build_ui()
-
-    # ── Build UI ────────────────────────────────
-    def _build_ui(self):
-        # ── Hero / branding section ──────────────
+        # ── Hero / branding section (persistent) ──────────────
         hero = ctk.CTkFrame(self, corner_radius=0, fg_color=("#1565C0", "#0D1B2A"))
         hero.pack(fill="x")
 
@@ -153,72 +204,34 @@ class LoginWindow(ctk.CTk):
                      font=ctk.CTkFont(size=14),
                      text_color="#90CAF9").pack(pady=(0, 16))
 
-        # ── Form card ───────────────────────────
-        card = ctk.CTkFrame(self, corner_radius=16)
-        card.pack(fill="both", expand=True, padx=24, pady=16)
+        # ── Frame Container ────────────────────────────
+        self.container = ctk.CTkFrame(self, corner_radius=16)
+        self.container.pack(fill="both", expand=True, padx=24, pady=16)
 
-        ctk.CTkLabel(card, text="Welcome back 👋",
-                     font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(16, 2))
-        ctk.CTkLabel(card, text="Log in to continue",
-                     font=ctk.CTkFont(size=13), text_color="gray").pack(pady=(0, 6))
+        # Initialize frames
+        self.frames = {}
+        for F in (LoginFrame, SignUpFrame):
+            frame = F(self.container, self)
+            self.frames[F] = frame
 
-        self.username_entry = _make_field(card, "Username", "Enter your username")
-        self.password_entry = _make_field(card, "Password", "Enter your password", show="•")
+        self.show_frame(LoginFrame)
 
-        # Allow Enter key to submit
-        self.password_entry.bind("<Return>", lambda e: self._login())
+    def show_frame(self, frame_class):
+        """Show a frame for the given class."""
+        # Hide all frames
+        for frame in self.frames.values():
+            frame.pack_forget()
+        
+        # Show the requested frame
+        frame = self.frames[frame_class]
+        frame.pack(fill="both", expand=True)
 
-        # ── Error label ─────────────────────────
-        self.error_label = ctk.CTkLabel(card, text="", text_color="#FF6B6B",
-                                        font=ctk.CTkFont(size=12), wraplength=340)
-        self.error_label.pack(pady=(6, 0))
-
-        # ── Login button ─────────────────────────
-        ctk.CTkButton(card, text="Login",
-                      height=44, corner_radius=10,
-                      font=ctk.CTkFont(size=14, weight="bold"),
-                      command=self._login).pack(fill="x", padx=24, pady=(10, 4))
-
-        # ── Divider ───────────────────────────────────
-        ctk.CTkLabel(card, text="─────  or  ─────",
-                     font=ctk.CTkFont(size=12), text_color="gray").pack(pady=4)
-
-        # ── Sign-up button ────────────────────────
-        ctk.CTkButton(card, text="✨  Don't have an account? Sign Up",
-                      height=44, corner_radius=10,
-                      fg_color=("#0097A7", "#006064"),
-                      hover_color=("#00838F", "#004D40"),
-                      text_color="white",
-                      font=ctk.CTkFont(size=13, weight="bold"),
-                      command=self._open_signup).pack(fill="x", padx=24, pady=(0, 16))
-
-    # ── Login handler ────────────────────────────
-    def _login(self):
-        username = self.username_entry.get().strip()
-        password = self.password_entry.get()
-
-        ok, result = login_user(username, password)
-        if ok:
-            self.logged_in_user     = result    # result is full_name on success
-            self.logged_in_username = username  # keep the login handle for DB lookups
-            self._launch_chatbot()
-        else:
-            self._show_error(f"⚠  {result}")
-
-    # ── Open sign-up modal ───────────────────────
-    def _open_signup(self):
-        SignUpWindow(self)
-
-    # ── Launch chatbot after login ────────────────
     def _launch_chatbot(self):
         """Destroy the login window and open the main chatbot window."""
-        from GUI import OfflineChatbot   # imported here to avoid circular imports at startup
+        from GUI import OfflineChatbot
         self.destroy()
         app = OfflineChatbot(
             user_name=self.logged_in_user,
             username=self.logged_in_username
         )
         app.mainloop()
-
-    def _show_error(self, text: str):
-        self.error_label.configure(text=text)

@@ -4,6 +4,7 @@
 
 import os
 import hashlib
+import uuid
 import mysql.connector
 from mysql.connector import Error
 from dotenv import load_dotenv
@@ -68,15 +69,23 @@ def init_db():
         # ── chat_history table ───────────────────────────────────────────
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS chat_history (
-                id         INT          PRIMARY KEY AUTO_INCREMENT,
-                user_id    INT          NOT NULL,
-                sender     VARCHAR(20)  NOT NULL,
-                message    TEXT         NOT NULL,
-                model      VARCHAR(60)  NOT NULL DEFAULT 'llama3',
-                created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                id            INT          PRIMARY KEY AUTO_INCREMENT,
+                user_id       INT          NOT NULL,
+                session_id    VARCHAR(36)  NOT NULL,
+                session_title VARCHAR(255) NOT NULL,
+                sender        VARCHAR(20)  NOT NULL,
+                message       TEXT         NOT NULL,
+                model         VARCHAR(60)  NOT NULL DEFAULT 'llama3',
+                created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
+
+        # Add missing columns for older databases
+        cursor.execute("SHOW COLUMNS FROM chat_history LIKE 'session_id'")
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE chat_history ADD COLUMN session_id VARCHAR(36) NOT NULL AFTER user_id")
+            cursor.execute("ALTER TABLE chat_history ADD COLUMN session_title VARCHAR(255) NOT NULL AFTER session_id")
 
         conn.commit()
         cursor.close()
@@ -269,10 +278,10 @@ def build_system_prompt() -> str:
 # ─────────────────────────────────────────────
 #  Chat History API
 # ─────────────────────────────────────────────
-def save_message(username: str, sender: str, message: str, model: str = "llama3") -> None:
+def save_message(username: str, session_id: str, sender: str, message: str, model: str = "llama3") -> None:
     """
-    Persist a single chat message for the given user.
-    sender – 'user' or 'bot'
+    Persist a single chat message for the given user and session.
+    Automatically generates a session title if it's the first message.
     """
     try:
         user_id = _get_user_id(username)
@@ -281,9 +290,20 @@ def save_message(username: str, sender: str, message: str, model: str = "llama3"
 
         conn = _get_connection()
         cursor = conn.cursor()
+
+        # Check if this session already has a title
+        cursor.execute("SELECT session_title FROM chat_history WHERE session_id = %s LIMIT 1", (session_id,))
+        row = cursor.fetchone()
+        
+        if row:
+            session_title = row[0]
+        else:
+            # Generate title from the first 50 chars of the first message
+            session_title = message[:50] + ("..." if len(message) > 50 else "")
+
         cursor.execute(
-            "INSERT INTO chat_history (user_id, sender, message, model) VALUES (%s, %s, %s, %s)",
-            (user_id, sender, message, model)
+            "INSERT INTO chat_history (user_id, session_id, session_title, sender, message, model) VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, session_id, session_title, sender, message, model)
         )
         conn.commit()
         cursor.close()
@@ -293,10 +313,86 @@ def save_message(username: str, sender: str, message: str, model: str = "llama3"
         pass
 
 
+def get_user_sessions(username: str) -> list[dict]:
+    """
+    Return unique sessions for this user with their title and latest message date.
+    """
+    try:
+        user_id = _get_user_id(username)
+        if user_id is None:
+            return []
+
+        conn = _get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT session_id, session_title, MAX(created_at) as last_active
+            FROM   chat_history
+            WHERE  user_id = %s
+            GROUP  BY session_id, session_title
+            ORDER  BY last_active DESC
+            """,
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+    except Error:
+        return []
+
+
+def load_session_messages(username: str, session_id: str) -> list[dict]:
+    """
+    Load all messages for a specific session.
+    """
+    try:
+        user_id = _get_user_id(username)
+        if user_id is None:
+            return []
+
+        conn = _get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT sender, message, model, created_at
+            FROM   chat_history
+            WHERE  user_id = %s AND session_id = %s
+            ORDER  BY created_at ASC
+            """,
+            (user_id, session_id)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+    except Error:
+        return []
+
+
+def update_session_title(session_id: str, new_title: str) -> bool:
+    """
+    Update the title for a specific session.
+    """
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE chat_history SET session_title = %s WHERE session_id = %s",
+            (new_title.strip(), session_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True
+    except Error:
+        return False
+
+
 def load_history(username: str, limit: int = 100) -> list[dict]:
     """
-    Return the last `limit` messages for this user, oldest-first.
-    Each entry is a dict: { sender, message, model, created_at }
+    Deprecated: Use load_session_messages. 
+    Remaining for backward compatibility if needed.
     """
     try:
         user_id = _get_user_id(username)

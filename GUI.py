@@ -96,7 +96,7 @@ class NavigationSidebar(ctk.CTkFrame):
         self.new_chat_cmd = new_chat_cmd
         self.load_session_cmd = load_session_cmd
 
-        self.grid_rowconfigure(3, weight=1)
+        self.grid_rowconfigure(4, weight=1)
 
         # Title
         ctk.CTkLabel(self, text="🤖 ChatOff AI", font=ctk.CTkFont(size=20, weight="bold")).grid(row=0, column=0, padx=20, pady=(20, 10))
@@ -302,9 +302,10 @@ class ChatFrame(ctk.CTkFrame):
         self.chat_area.configure(state="normal")
         self.chat_area.delete("1.0", "end")
         for m in messages:
-            lbl = "You" if m["sender"] == "user" else "Bot"
-            self.chat_area.insert("end", f"{lbl}: ", "bold")
-            self.chat_area.insert("end", f"{m['message']}\n\n")
+            self.chat_area.insert("end", "You: ", "bold")
+            self.chat_area.insert("end", f"{m['prompt_text']}\n\n")
+            self.chat_area.insert("end", "Bot: ", "bold")
+            self.chat_area.insert("end", f"{m['response_text']}\n\n")
         self.chat_area.see("end")
         self.chat_area.configure(state="disabled")
 
@@ -317,7 +318,6 @@ class ChatFrame(ctk.CTkFrame):
         
         self.entry.delete(0, "end")
         self._append_chat("You", msg)
-        save_message(self.controller.username, self.current_session_id, "user", msg, "llama3")
         
         self.send_btn.configure(state="disabled")
         threading.Thread(target=self._process_ai, args=(msg, is_first_msg), daemon=True).start()
@@ -332,7 +332,7 @@ class ChatFrame(ctk.CTkFrame):
                 self.controller.after(0, lambda c=chunk: (self.chat_area.configure(state="normal"), self.chat_area.insert("end", c), self.chat_area.see("end"), self.chat_area.configure(state="disabled")))
             
             full = "".join(collected)
-            save_message(self.controller.username, self.current_session_id, "bot", full, model)
+            save_message(self.controller.username, self.current_session_id, prompt, full)
             self.controller.after(0, lambda: (self.chat_area.configure(state="normal"), self.chat_area.insert("end", "\n\n"), self.chat_area.configure(state="disabled")))
             self.controller.after(0, lambda: self.sidebar.refresh_sessions())
 

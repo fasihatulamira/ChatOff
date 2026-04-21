@@ -73,9 +73,8 @@ def init_db():
                 user_id       INT          NOT NULL,
                 session_id    VARCHAR(36)  NOT NULL,
                 session_title VARCHAR(255) NOT NULL,
-                sender        VARCHAR(20)  NOT NULL,
-                message       TEXT         NOT NULL,
-                model         VARCHAR(60)  NOT NULL DEFAULT 'llama3',
+                prompt_text   TEXT         NOT NULL,
+                response_text TEXT         NOT NULL,
                 created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
@@ -278,9 +277,9 @@ def build_system_prompt() -> str:
 # ─────────────────────────────────────────────
 #  Chat History API
 # ─────────────────────────────────────────────
-def save_message(username: str, session_id: str, sender: str, message: str, model: str = "llama3") -> None:
+def save_message(username: str, session_id: str, prompt_text: str, response_text: str) -> None:
     """
-    Persist a single chat message for the given user and session.
+    Persist a single chat interaction for the given user and session.
     Automatically generates a session title if it's the first message.
     """
     try:
@@ -299,11 +298,11 @@ def save_message(username: str, session_id: str, sender: str, message: str, mode
             session_title = row[0]
         else:
             # Generate title from the first 50 chars of the first message
-            session_title = message[:50] + ("..." if len(message) > 50 else "")
+            session_title = prompt_text[:50] + ("..." if len(prompt_text) > 50 else "")
 
         cursor.execute(
-            "INSERT INTO chat_history (user_id, session_id, session_title, sender, message, model) VALUES (%s, %s, %s, %s, %s, %s)",
-            (user_id, session_id, session_title, sender, message, model)
+            "INSERT INTO chat_history (user_id, session_id, session_title, prompt_text, response_text) VALUES (%s, %s, %s, %s, %s)",
+            (user_id, session_id, session_title, prompt_text, response_text)
         )
         conn.commit()
         cursor.close()
@@ -355,7 +354,7 @@ def load_session_messages(username: str, session_id: str) -> list[dict]:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT sender, message, model, created_at
+            SELECT prompt_text, response_text, created_at
             FROM   chat_history
             WHERE  user_id = %s AND session_id = %s
             ORDER  BY created_at ASC
@@ -403,7 +402,7 @@ def load_history(username: str, limit: int = 100) -> list[dict]:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT sender, message, model, created_at
+            SELECT prompt_text, response_text, created_at
             FROM   chat_history
             WHERE  user_id = %s
             ORDER  BY created_at DESC

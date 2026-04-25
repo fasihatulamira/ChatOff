@@ -205,35 +205,63 @@ class HelpFrame(ctk.CTkFrame):
         content = ctk.CTkFrame(self, corner_radius=20)
         content.pack(side="right", fill="both", expand=True, padx=40, pady=40)
 
-        self.help_box = ctk.CTkTextbox(content, font=ctk.CTkFont(size=15), state="disabled")
-        self.help_box.pack(fill="both", expand=True, padx=20, pady=20)
+        self.chat_scroll = ctk.CTkScrollableFrame(content, fg_color="transparent")
+        self.chat_scroll.pack(fill="both", expand=True, padx=20, pady=20)
 
-        self.btn_frame = ctk.CTkFrame(content, fg_color="transparent")
-        self.btn_frame.pack(fill="x", padx=20, pady=(0, 20))
-
+        self.options_frame = None
         self._show_initial_help()
 
-    def _show_initial_help(self):
-        self._append_help("System", "Hello! How can I assist you today? Please choose an option below:")
+    def _add_bubble(self, sender, text, is_system=True):
+        bg_color = ("gray85", "gray20") if is_system else ("#0097A7", "#006064")
+        text_color = ("black", "white") if is_system else "white"
+        
+        bubble_frame = ctk.CTkFrame(self.chat_scroll, fg_color=bg_color, corner_radius=15)
+        
+        anchor = "w" if is_system else "e"
+        padx = (10, 100) if is_system else (100, 10)
+        
+        bubble_frame.pack(anchor=anchor, padx=padx, pady=8)
+
+        lbl = ctk.CTkLabel(bubble_frame, text=f"{sender}:\n{text}", font=ctk.CTkFont(size=14), justify="left", text_color=text_color)
+        lbl.pack(padx=15, pady=10)
+
+        self.after(50, lambda: self.chat_scroll._parent_canvas.yview_moveto(1.0))
+        return bubble_frame
+
+    def _show_options(self):
+        if self.options_frame:
+            self.options_frame.destroy()
+            
+        self.options_frame = ctk.CTkFrame(self.chat_scroll, fg_color="transparent")
+        self.options_frame.pack(anchor="w", padx=(10, 100), pady=(0, 10))
+
         options = ["How to Start a Chat", "Managing Knowledge Base", "Privacy & Data"]
         for opt in options:
-            ctk.CTkButton(self.btn_frame, text=opt, height=36, corner_radius=8,
-                          command=lambda o=opt: self._handle_help_req(o)).pack(side="left", padx=5)
+            btn = ctk.CTkButton(self.options_frame, text=opt, height=34, corner_radius=17,
+                                fg_color="transparent", border_width=1, border_color="#0097A7",
+                                text_color=("#0097A7", "#4DD0E1"), hover_color=("#E0F7FA", "#004D40"),
+                                command=lambda o=opt: self._handle_help_req(o))
+            btn.pack(anchor="w", pady=4)
+        
+        self.after(50, lambda: self.chat_scroll._parent_canvas.yview_moveto(1.0))
 
-    def _append_help(self, sender, msg):
-        self.help_box.configure(state="normal")
-        self.help_box.insert("end", f"\n【{sender}】: {msg}\n")
-        self.help_box.see("end")
-        self.help_box.configure(state="disabled")
+    def _show_initial_help(self):
+        self._add_bubble("System", "Hello! How can I assist you today? Please choose an option below:", is_system=True)
+        self._show_options()
 
     def _handle_help_req(self, topic):
-        self._append_help("You", topic)
+        if self.options_frame:
+            self.options_frame.destroy()
+            self.options_frame = None
+
+        self._add_bubble("You", topic, is_system=False)
         responses = {
             "How to Start a Chat": "Go to 'Ask AI' from the dashboard. Click 'New Chat' to start or select an old one from the sidebar.",
             "Managing Knowledge Base": "In 'Ask AI', click 'Knowledge Base'. Add titles and content to provide the AI with custom local data.",
             "Privacy & Data": "ChatOff runs entirely on your local machine. No data is sent to the internet. Your chats are stored in your MySQL db.",
         }
-        self._append_help("System", responses.get(topic, "I don't have info on that yet."))
+        self.after(300, lambda: self._add_bubble("System", responses.get(topic, "I don't have info on that yet."), is_system=True))
+        self.after(800, self._show_options)
 
 
 # ─────────────────────────────────────────────

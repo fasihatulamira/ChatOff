@@ -189,6 +189,7 @@ class LoginWindow(ctk.CTk):
         y  = (sh - win_h) // 2
         self.geometry(f"{win_w}x{win_h}+{x}+{y}")
         self.minsize(420, 620)
+        self.after(10, lambda: self.state("zoomed"))  # Maximize after window draws
 
         self.logged_in_user: str = ""
         self.logged_in_username: str = ""

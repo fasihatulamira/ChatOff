@@ -386,6 +386,7 @@ class OfflineChatbot(ctk.CTk):
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"{win_w}x{win_h}+{(sw-win_w)//2}+{(sh-win_h)//2}")
         self.minsize(900, 700)
+        self.after(10, lambda: self.state("zoomed"))  # Maximize after window draws
 
         self.container = ctk.CTkFrame(self, fg_color="transparent")
         self.container.pack(fill="both", expand=True)

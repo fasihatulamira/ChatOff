@@ -1,2 +1,16 @@
-__pycache__
+# Python temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables (Crucial for security!)
 .env
+
+# Virtual environments
+venv/
+env/
+
+# Build and Dist folders (PyInstaller creates these)
+build/
+dist/
+*.spec

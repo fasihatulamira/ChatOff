@@ -11,7 +11,6 @@ import ollama
 from tkinter import messagebox  
 
 # Import login window and database initialiser
-from auth import init_db
 from login import LoginWindow
 
 
@@ -241,9 +240,6 @@ class OfflineChatbot(ctk.CTk):
 
 # ===== RUN APP =====
 if __name__ == "__main__":
-    # Ensure the users table exists before anything opens
-    init_db()
-
     # Launch the Login window first; it will open the chatbot on success
     login = LoginWindow()
     login.mainloop()

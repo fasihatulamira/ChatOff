@@ -5,7 +5,7 @@
 
 import customtkinter as ctk
 from tkinter import messagebox
-from auth import init_db, login_user, register_user
+from auth import login_user, register_user
 
 
 # ─────────────────────────────────────────────

@@ -315,6 +315,11 @@ class ChatFrame(ctk.CTkFrame):
         self.entry.bind("<Return>", lambda e: self._send())
         self.send_btn = ctk.CTkButton(self.input_frame, text="Send", width=100, height=42, command=self._send)
         self.send_btn.grid(row=0, column=1)
+        self.stop_btn = ctk.CTkButton(self.input_frame, text="Stop", width=100, height=42, 
+                                      command=self._stop_generation, state="disabled", 
+                                      fg_color="#d9534f", hover_color="#c9302c")
+        self.stop_btn.grid(row=0, column=2, padx=(10, 0))
+        self.stop_generation_flag = False
 
     def start_new_chat(self):
         self.current_session_id = str(uuid.uuid4())
@@ -337,6 +342,9 @@ class ChatFrame(ctk.CTkFrame):
         self.chat_area.see("end")
         self.chat_area.configure(state="disabled")
 
+    def _stop_generation(self):
+        self.stop_generation_flag = True
+
     def _send(self):
         msg = self.entry.get().strip()
         if not msg: return
@@ -348,6 +356,8 @@ class ChatFrame(ctk.CTkFrame):
         self._append_chat("You", msg)
         
         self.send_btn.configure(state="disabled")
+        self.stop_btn.configure(state="normal")
+        self.stop_generation_flag = False
         threading.Thread(target=self._process_ai, args=(msg, is_first_msg), daemon=True).start()
 
     def _process_ai(self, prompt, is_first_msg):
@@ -356,6 +366,8 @@ class ChatFrame(ctk.CTkFrame):
         try:
             self.controller.after(0, lambda: (self.chat_area.configure(state="normal"), self.chat_area.insert("end", "Bot: ", "bold")))
             for chunk in get_response(prompt, model, sys):
+                if self.stop_generation_flag:
+                    break
                 collected.append(chunk)
                 self.controller.after(0, lambda c=chunk: (self.chat_area.configure(state="normal"), self.chat_area.insert("end", c), self.chat_area.see("end"), self.chat_area.configure(state="disabled")))
             
@@ -372,6 +384,7 @@ class ChatFrame(ctk.CTkFrame):
             self.controller.after(0, lambda: messagebox.showerror("Error", str(e)))
         finally:
             self.controller.after(0, lambda: self.send_btn.configure(state="normal"))
+            self.controller.after(0, lambda: self.stop_btn.configure(state="disabled"))
 
     def _generate_catchy_title(self, prompt):
         """Asks the AI to create a short catchy title for the conversation."""

@@ -139,6 +139,23 @@ class OfflineChatbot(ctk.CTk):
         )
         self.send_button.grid(row=0, column=1)
 
+        # Stop generate button
+        self.stop_button = ctk.CTkButton(
+            self.input_frame, 
+            text="Stop", 
+            width=100, 
+            height=40, 
+            font=ctk.CTkFont(weight="bold"), 
+            command=self.stop_generation_event,
+            state="disabled",
+            fg_color="#d9534f",
+            hover_color="#c9302c"
+        )
+        self.stop_button.grid(row=0, column=2, padx=(10, 0))
+
+        # Flag for stopping generation
+        self.stop_generation_flag = False
+
 
     # ===== CHANGE THEME FUNCTION =====
     def change_appearance_mode_event(self, new_appearance_mode: str):
@@ -159,6 +176,10 @@ class OfflineChatbot(ctk.CTk):
         self.chat_area.see("end")  # auto scroll to bottom
 
 
+    # ===== STOP GENERATION FUNCTION =====
+    def stop_generation_event(self):
+        self.stop_generation_flag = True
+
     # ===== SEND MESSAGE FUNCTION =====
     def send_message(self):
         user_msg = self.entry.get()  # get input text
@@ -174,6 +195,8 @@ class OfflineChatbot(ctk.CTk):
         
         # Disable button to prevent spam clicking
         self.send_button.configure(state="disabled")
+        self.stop_button.configure(state="normal")
+        self.stop_generation_flag = False
 
         # Run AI response in separate thread (avoid freezing UI)
         threading.Thread(
@@ -201,6 +224,9 @@ class OfflineChatbot(ctk.CTk):
 
             # Loop through streamed chunks
             for chunk in stream:
+                if self.stop_generation_flag:
+                    break
+
                 content = chunk['message']['content']
 
                 # Update UI safely from thread
@@ -228,6 +254,7 @@ class OfflineChatbot(ctk.CTk):
         finally:
             # Re-enable send button
             self.after(0, lambda: self.send_button.configure(state="normal"))
+            self.after(0, lambda: self.stop_button.configure(state="disabled"))
 
 
     # ===== UPDATE STREAMED TEXT =====

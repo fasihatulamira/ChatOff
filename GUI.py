@@ -10,10 +10,11 @@ from tkinter import messagebox
 from chatbot import get_response
 from auth import (
     save_message, clear_history,
-    add_knowledge, get_all_knowledge, delete_knowledge,
-    build_system_prompt, get_user_sessions, load_session_messages,
+    get_user_sessions, load_session_messages,
     update_session_title
 )
+import os
+from rag import process_pdf, get_all_sources, delete_source, clear_rag, query_rag
 
 # Set UI theme
 ctk.set_appearance_mode("Dark")
@@ -28,64 +29,133 @@ class AdminFrame(ctk.CTkFrame):
         super().__init__(parent, fg_color="transparent")
         self.controller = controller
 
-        header = ctk.CTkFrame(self, corner_radius=0, fg_color=("#0097A7", "#006064"))
-        header.pack(fill="x")
+        # Header (Logout & Appearance)
+        header = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        header.pack(fill="x", pady=(10, 0), padx=20)
         
         logout_btn = ctk.CTkButton(header, text="Logout", width=80, fg_color="#D32F2F", hover_color="#B71C1C", command=self.controller._logout)
-        logout_btn.pack(side="right", padx=20)
+        logout_btn.pack(side="right", padx=(10, 0))
         
-        title_frame = ctk.CTkFrame(header, fg_color="transparent")
-        title_frame.pack(side="left", padx=20, pady=(18, 16))
-        ctk.CTkLabel(title_frame, text="📚  Admin Knowledge Base", font=ctk.CTkFont(size=22, weight="bold"), text_color="white").pack(anchor="w")
-        ctk.CTkLabel(title_frame, text="Manage knowledge injected into AI responses", font=ctk.CTkFont(size=12), text_color="#B2EBF2").pack(anchor="w")
+        self.appearance_menu = ctk.CTkOptionMenu(header, values=["Dark", "Light", "System"], command=ctk.set_appearance_mode, width=100)
+        self.appearance_menu.pack(side="right")
+        self.appearance_menu.set("Dark")
+        
+        # Title
+        title_frame = ctk.CTkFrame(self, fg_color="transparent")
+        title_frame.pack(fill="x", padx=40, pady=(10, 20))
+        ctk.CTkLabel(title_frame, text="Knowledge Base Management", font=ctk.CTkFont(size=28, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(title_frame, text="Upload and manage PDF documents to power the AI responses.", font=ctk.CTkFont(size=14), text_color="gray").pack(anchor="w")
 
-        form = ctk.CTkFrame(self, corner_radius=12)
-        form.pack(fill="x", padx=20, pady=(16, 8))
-        ctk.CTkLabel(form, text="Title", font=ctk.CTkFont(size=13, weight="bold"), anchor="w").pack(fill="x", padx=16, pady=(12, 2))
-        self.title_entry = ctk.CTkEntry(form, placeholder_text="e.g. FAQ", height=38, corner_radius=8)
-        self.title_entry.pack(fill="x", padx=16, pady=(0, 8))
-        ctk.CTkLabel(form, text="Content", font=ctk.CTkFont(size=13, weight="bold"), anchor="w").pack(fill="x", padx=16, pady=(0, 2))
-        self.content_box = ctk.CTkTextbox(form, height=80, corner_radius=8)
-        self.content_box.pack(fill="x", padx=16, pady=(0, 8))
-        self.form_error = ctk.CTkLabel(form, text="", text_color="#FF6B6B", font=ctk.CTkFont(size=12))
-        self.form_error.pack()
-        ctk.CTkButton(form, text="➕  Add to Knowledge Base", height=40, corner_radius=8, fg_color=("#0097A7", "#006064"), hover_color=("#00838F", "#004D40"), command=self._add_entry).pack(fill="x", padx=16, pady=(4, 14))
+        # Upload Zone (Large dashed-like area)
+        self.upload_zone = ctk.CTkFrame(self, corner_radius=15, border_width=2, border_color="gray30", fg_color="gray10")
+        self.upload_zone.pack(fill="x", padx=60, pady=(10, 30), ipady=20)
+        
+        icon_label = ctk.CTkLabel(self.upload_zone, text="📄", font=ctk.CTkFont(size=40))
+        icon_label.pack(pady=(20, 5))
+        
+        main_text = ctk.CTkLabel(self.upload_zone, text="Click to browse and upload PDF", font=ctk.CTkFont(size=18, weight="bold"))
+        main_text.pack(pady=5)
+        
+        sub_text = ctk.CTkLabel(self.upload_zone, text="Maximum file size: 50MB", font=ctk.CTkFont(size=12), text_color="gray")
+        sub_text.pack(pady=(0, 10))
+        
+        self.upload_btn = ctk.CTkButton(self.upload_zone, text="Browse Files", font=ctk.CTkFont(weight="bold"), fg_color=("#0097A7", "#006064"), hover_color=("#00838F", "#004D40"), command=self._upload_pdf)
+        self.upload_btn.pack(pady=(10, 10))
+        
+        self.status_label = ctk.CTkLabel(self.upload_zone, text="", text_color="gray", font=ctk.CTkFont(size=12))
+        self.status_label.pack()
 
-        list_header = ctk.CTkFrame(self, fg_color="transparent")
-        list_header.pack(fill="x", padx=20, pady=(4, 0))
-        ctk.CTkLabel(list_header, text="Saved Entries", font=ctk.CTkFont(size=14, weight="bold")).pack(side="left")
-        ctk.CTkButton(list_header, text="Clear All", width=80, height=28, command=self._clear_all).pack(side="right")
-
-        self.entries_frame = ctk.CTkScrollableFrame(self, corner_radius=10, height=160)
-        self.entries_frame.pack(fill="both", expand=True, padx=20, pady=(6, 16))
+        # Documents Table area
+        table_container = ctk.CTkFrame(self, corner_radius=15, fg_color="gray15")
+        table_container.pack(fill="both", expand=True, padx=40, pady=(0, 30))
+        
+        table_header_top = ctk.CTkFrame(table_container, fg_color="transparent")
+        table_header_top.pack(fill="x", padx=20, pady=(15, 10))
+        self.doc_count_label = ctk.CTkLabel(table_header_top, text="Uploaded Documents (0)", font=ctk.CTkFont(size=16, weight="bold"))
+        self.doc_count_label.pack(side="left")
+        ctk.CTkButton(table_header_top, text="Clear All", width=80, height=28, fg_color="gray30", hover_color="gray20", command=self._clear_all).pack(side="right")
+        
+        # Columns
+        col_frame = ctk.CTkFrame(table_container, fg_color="gray20", corner_radius=8)
+        col_frame.pack(fill="x", padx=20, pady=(0, 10))
+        col_frame.grid_columnconfigure(0, weight=4)
+        col_frame.grid_columnconfigure(1, weight=1)
+        col_frame.grid_columnconfigure(2, weight=2)
+        col_frame.grid_columnconfigure(3, weight=1)
+        
+        ctk.CTkLabel(col_frame, text="FILE NAME", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=0, sticky="w", padx=15, pady=8)
+        ctk.CTkLabel(col_frame, text="SIZE", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=1, sticky="w", padx=10, pady=8)
+        ctk.CTkLabel(col_frame, text="UPLOAD DATE", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=2, sticky="w", padx=10, pady=8)
+        ctk.CTkLabel(col_frame, text="ACTIONS", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=3, sticky="e", padx=15, pady=8)
+        
+        self.entries_frame = ctk.CTkScrollableFrame(table_container, fg_color="transparent")
+        self.entries_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
         self._refresh_entries()
 
-    def _add_entry(self):
-        title, content = self.title_entry.get().strip(), self.content_box.get("1.0", "end").strip()
-        ok, msg = add_knowledge(title, content)
+    def _upload_pdf(self):
+        file_path = ctk.filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
+        if not file_path: return
+        
+        self.upload_btn.configure(state="disabled")
+        self.status_label.configure(text=f"Reading & Embedding: {os.path.basename(file_path)}...")
+        
+        def task():
+            def progress(current, total):
+                self.controller.after(0, lambda: self.status_label.configure(text=f"Embedding chunk {current}/{total}..."))
+                
+            ok, msg = process_pdf(file_path, progress_callback=progress)
+            self.controller.after(0, lambda: self._upload_complete(ok, msg))
+            
+        threading.Thread(target=task, daemon=True).start()
+        
+    def _upload_complete(self, ok, msg):
+        self.upload_btn.configure(state="normal")
+        color = "#4CAF50" if ok else "#FF6B6B"
+        self.status_label.configure(text=msg, text_color=color)
         if ok:
-            self.title_entry.delete(0, "end"); self.content_box.delete("1.0", "end"); self.form_error.configure(text="")
             self._refresh_entries()
-        else: self.form_error.configure(text=f"⚠  {msg}")
 
     def _refresh_entries(self):
         for w in self.entries_frame.winfo_children(): w.destroy()
-        entries = get_all_knowledge()
-        if not entries:
-            ctk.CTkLabel(self.entries_frame, text="No entries yet.", text_color="gray").pack(pady=20)
+        sources_info = get_all_sources()
+        self.doc_count_label.configure(text=f"Uploaded Documents ({len(sources_info)})")
+        
+        if not sources_info:
+            ctk.CTkLabel(self.entries_frame, text="No documents found.", text_color="gray").pack(pady=40)
             return
-        for e in entries:
-            row = ctk.CTkFrame(self.entries_frame, corner_radius=8)
-            row.pack(fill="x", pady=4)
-            text_frame = ctk.CTkFrame(row, fg_color="transparent")
-            text_frame.pack(side="left", fill="both", expand=True, padx=12, pady=8)
-            ctk.CTkLabel(text_frame, text=e["title"], font=ctk.CTkFont(size=13, weight="bold"), anchor="w").pack(fill="x")
-            ctk.CTkLabel(text_frame, text=e["content"][:80], font=ctk.CTkFont(size=11), text_color="gray", anchor="w").pack(fill="x")
-            ctk.CTkButton(row, text="🗑", width=36, height=36, command=lambda i=e["id"]: (delete_knowledge(i), self._refresh_entries())).pack(side="right", padx=8)
+            
+        for i, (src, meta) in enumerate(sources_info):
+            bg_color = "gray15" if i % 2 == 0 else "gray12"
+            row = ctk.CTkFrame(self.entries_frame, corner_radius=0, fg_color=bg_color)
+            row.pack(fill="x")
+            
+            row.grid_columnconfigure(0, weight=4)
+            row.grid_columnconfigure(1, weight=1)
+            row.grid_columnconfigure(2, weight=2)
+            row.grid_columnconfigure(3, weight=1)
+            
+            # File name with icon
+            name_frame = ctk.CTkFrame(row, fg_color="transparent")
+            name_frame.grid(row=0, column=0, sticky="w", padx=15, pady=12)
+            ctk.CTkLabel(name_frame, text="📄", text_color="#EF5350").pack(side="left", padx=(0, 10))
+            ctk.CTkLabel(name_frame, text=src, font=ctk.CTkFont(size=13)).pack(side="left")
+            
+            # Size
+            ctk.CTkLabel(row, text=meta.get("size", "Unknown"), font=ctk.CTkFont(size=12), text_color="gray").grid(row=0, column=1, sticky="w", padx=10)
+            
+            # Date
+            ctk.CTkLabel(row, text=meta.get("date", "Unknown"), font=ctk.CTkFont(size=12), text_color="gray").grid(row=0, column=2, sticky="w", padx=10)
+            
+            # Actions
+            action_frame = ctk.CTkFrame(row, fg_color="transparent")
+            action_frame.grid(row=0, column=3, sticky="e", padx=15)
+            ctk.CTkButton(action_frame, text="🗑", width=30, height=30, fg_color="transparent", hover_color="gray30", command=lambda s=src: (delete_source(s), self._refresh_entries())).pack(side="right")
 
     def _clear_all(self):
-        if messagebox.askyesno("Clear", "Delete ALL knowledge?"):
-            from auth import clear_knowledge; clear_knowledge(); self._refresh_entries()
+        if messagebox.askyesno("Clear", "Delete ALL uploaded PDFs?"):
+            clear_rag()
+            self._refresh_entries()
 
 
 # ─────────────────────────────────────────────
@@ -360,7 +430,8 @@ class ChatFrame(ctk.CTkFrame):
         threading.Thread(target=self._process_ai, args=(msg, is_first_msg), daemon=True).start()
 
     def _process_ai(self, prompt, is_first_msg):
-        model, sys = "llama3", build_system_prompt()
+        model = "llama3"
+        sys = query_rag(prompt)
         collected = []
         try:
             self.controller.after(0, lambda: (self.chat_area.configure(state="normal"), self.chat_area.insert("end", "Bot: ", "bold")))

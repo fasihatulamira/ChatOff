@@ -21,21 +21,23 @@ ctk.set_default_color_theme("blue")
 
 
 # ─────────────────────────────────────────────
-#  KNOWLEDGE BASE MODAL WINDOW
+#  ADMIN DASHBOARD FRAME
 # ─────────────────────────────────────────────
-class KnowledgeBaseWindow(ctk.CTkToplevel):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.title("📚 Knowledge Base")
-        self.geometry("620x580")
-        self.resizable(False, False)
-        self.grab_set()
-        self.transient(parent)
+class AdminFrame(ctk.CTkFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, fg_color="transparent")
+        self.controller = controller
 
         header = ctk.CTkFrame(self, corner_radius=0, fg_color=("#0097A7", "#006064"))
         header.pack(fill="x")
-        ctk.CTkLabel(header, text="📚  Knowledge Base", font=ctk.CTkFont(size=22, weight="bold"), text_color="white").pack(pady=(18, 4))
-        ctk.CTkLabel(header, text="Entries are injected as context into every AI response", font=ctk.CTkFont(size=12), text_color="#B2EBF2").pack(pady=(0, 16))
+        
+        logout_btn = ctk.CTkButton(header, text="Logout", width=80, fg_color="#D32F2F", hover_color="#B71C1C", command=self.controller._logout)
+        logout_btn.pack(side="right", padx=20)
+        
+        title_frame = ctk.CTkFrame(header, fg_color="transparent")
+        title_frame.pack(side="left", padx=20, pady=(18, 16))
+        ctk.CTkLabel(title_frame, text="📚  Admin Knowledge Base", font=ctk.CTkFont(size=22, weight="bold"), text_color="white").pack(anchor="w")
+        ctk.CTkLabel(title_frame, text="Manage knowledge injected into AI responses", font=ctk.CTkFont(size=12), text_color="#B2EBF2").pack(anchor="w")
 
         form = ctk.CTkFrame(self, corner_radius=12)
         form.pack(fill="x", padx=20, pady=(16, 8))
@@ -114,10 +116,7 @@ class NavigationSidebar(ctk.CTkFrame):
         self.session_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.session_scroll.grid(row=4, column=0, sticky="nsew", padx=10, pady=(0, 20))
 
-        # Bottom Sidebar
-        self.kb_btn = ctk.CTkButton(self, text="📚 Knowledge Base", height=32, command=self._open_kb)
-        self.kb_btn.grid(row=5, column=0, padx=20, pady=5, sticky="ew")
-        
+
         # Appearance Settings
         ctk.CTkLabel(self, text="Appearance:", font=ctk.CTkFont(size=12), anchor="w").grid(row=6, column=0, padx=20, pady=(6, 0), sticky="ew")
         self.appearance_menu = ctk.CTkOptionMenu(self, values=["Dark", "Light", "System"], command=ctk.set_appearance_mode)
@@ -145,7 +144,7 @@ class NavigationSidebar(ctk.CTkFrame):
             self.controller.show_frame(ChatFrame)
             chat_frame.load_session(session_id)
 
-    def _open_kb(self): KnowledgeBaseWindow(self)
+
 
 
 # ─────────────────────────────────────────────
@@ -235,7 +234,7 @@ class HelpFrame(ctk.CTkFrame):
         self.options_frame = ctk.CTkFrame(self.chat_scroll, fg_color="transparent")
         self.options_frame.pack(anchor="w", padx=(10, 100), pady=(0, 10))
 
-        options = ["How to Start a Chat", "Managing Knowledge Base", "Privacy & Data"]
+        options = ["How to Start a Chat", "Privacy & Data"]
         for opt in options:
             btn = ctk.CTkButton(self.options_frame, text=opt, height=34, corner_radius=17,
                                 fg_color="transparent", border_width=1, border_color="#0097A7",
@@ -432,16 +431,21 @@ class OfflineChatbot(ctk.CTk):
         self.container = ctk.CTkFrame(self, fg_color="transparent")
         self.container.pack(fill="both", expand=True)
 
-        self.frames = {}
-        for F in (HomeFrame, ChatFrame, HelpFrame, InfoFrame):
-            frame = F(self.container, self)
-            self.frames[F] = frame
-            frame.grid(row=0, column=0, sticky="nsew")
-
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
-        self.show_frame(HomeFrame)
+        self.frames = {}
+        if self.username == "admin":
+            frame = AdminFrame(self.container, self)
+            self.frames[AdminFrame] = frame
+            frame.grid(row=0, column=0, sticky="nsew")
+            self.show_frame(AdminFrame)
+        else:
+            for F in (HomeFrame, ChatFrame, HelpFrame, InfoFrame):
+                frame = F(self.container, self)
+                self.frames[F] = frame
+                frame.grid(row=0, column=0, sticky="nsew")
+            self.show_frame(HomeFrame)
 
     def show_frame(self, frame_class):
         if hasattr(self.frames[frame_class], "sidebar"):

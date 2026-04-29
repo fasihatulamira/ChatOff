@@ -150,7 +150,12 @@ class AdminFrame(ctk.CTkFrame):
             # Actions
             action_frame = ctk.CTkFrame(row, fg_color="transparent")
             action_frame.grid(row=0, column=3, sticky="e", padx=15)
-            ctk.CTkButton(action_frame, text="🗑", width=30, height=30, fg_color="transparent", hover_color="gray30", command=lambda s=src: (delete_source(s), self._refresh_entries())).pack(side="right")
+            ctk.CTkButton(action_frame, text="🗑", width=30, height=30, fg_color="transparent", hover_color="gray30", command=lambda s=src: self._delete_single(s)).pack(side="right")
+
+    def _delete_single(self, src):
+        if messagebox.askyesno("Delete", f"Are you sure you want to delete '{src}'?"):
+            delete_source(src)
+            self._refresh_entries()
 
     def _clear_all(self):
         if messagebox.askyesno("Clear", "Delete ALL uploaded PDFs?"):

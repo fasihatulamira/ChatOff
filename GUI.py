@@ -77,11 +77,11 @@ class AdminFrame(ctk.CTkFrame):
         
         # Columns
         col_frame = ctk.CTkFrame(table_container, fg_color="gray20", corner_radius=8)
-        col_frame.pack(fill="x", padx=20, pady=(0, 10))
-        col_frame.grid_columnconfigure(0, weight=4)
-        col_frame.grid_columnconfigure(1, weight=1)
-        col_frame.grid_columnconfigure(2, weight=2)
-        col_frame.grid_columnconfigure(3, weight=1)
+        col_frame.pack(fill="x", padx=(10, 26), pady=(0, 10))
+        col_frame.grid_columnconfigure(0, weight=1)
+        col_frame.grid_columnconfigure(1, minsize=250, weight=0)
+        col_frame.grid_columnconfigure(2, minsize=200, weight=0)
+        col_frame.grid_columnconfigure(3, minsize=100, weight=0)
         
         ctk.CTkLabel(col_frame, text="FILE NAME", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=0, sticky="w", padx=15, pady=8)
         ctk.CTkLabel(col_frame, text="SIZE", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=1, sticky="w", padx=10, pady=8)
@@ -130,10 +130,10 @@ class AdminFrame(ctk.CTkFrame):
             row = ctk.CTkFrame(self.entries_frame, corner_radius=0, fg_color=bg_color)
             row.pack(fill="x")
             
-            row.grid_columnconfigure(0, weight=4)
-            row.grid_columnconfigure(1, weight=1)
-            row.grid_columnconfigure(2, weight=2)
-            row.grid_columnconfigure(3, weight=1)
+            row.grid_columnconfigure(0, weight=1)
+            row.grid_columnconfigure(1, minsize=250, weight=0)
+            row.grid_columnconfigure(2, minsize=200, weight=0)
+            row.grid_columnconfigure(3, minsize=100, weight=0)
             
             # File name with icon
             name_frame = ctk.CTkFrame(row, fg_color="transparent")

@@ -83,6 +83,30 @@ def process_pdf(file_path, progress_callback=None):
     save_db(db)
     return True, f"Successfully processed {len(chunks)} chunks from {source_name}."
 
+def add_manual_entry(title, question, answer):
+    db = load_db()
+    source_name = f"Manual: {title}"
+    if source_name in db["sources"]:
+        return False, "An entry with this title already exists."
+        
+    chunk = f"Title: {title}\nQuestion: {question}\nAnswer: {answer}"
+    
+    # Generate embedding
+    try:
+        emb = get_embedding(chunk)
+    except Exception as e:
+        return False, f"Failed to generate embedding: {str(e)}"
+        
+    db["chunks"].append(chunk)
+    db["embeddings"].append(emb)
+    db["sources"].append(source_name)
+    
+    upload_date = datetime.datetime.now().strftime("%b %d, %Y")
+    db["metadata"][source_name] = {"size": "Manual Entry", "date": upload_date}
+    
+    save_db(db)
+    return True, f"Successfully added manual entry: {title}"
+
 def query_rag(prompt, top_k=3):
     db = load_db()
     if not db["chunks"]:
@@ -103,6 +127,14 @@ def query_rag(prompt, top_k=3):
     context = "\n\n---\n\n".join(top_chunks)
     system_prompt = f"You are a helpful AI assistant. Use the following extracted document context to answer the user's question accurately. If the answer is not in the context, do your best to answer it normally.\n\n### Document Context:\n{context}"
     return system_prompt
+
+def get_source_content(source_name):
+    db = load_db()
+    content_chunks = []
+    for i, src in enumerate(db["sources"]):
+        if src == source_name:
+            content_chunks.append(db["chunks"][i])
+    return "\n\n---\n\n".join(content_chunks)
 
 def get_all_sources():
     db = load_db()

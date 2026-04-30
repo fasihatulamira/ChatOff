@@ -14,11 +14,128 @@ from auth import (
     update_session_title
 )
 import os
-from rag import process_pdf, get_all_sources, delete_source, clear_rag, query_rag
+from rag import process_pdf, get_all_sources, delete_source, clear_rag, query_rag, add_manual_entry, get_source_content
 
 # Set UI theme
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+
+
+# ─────────────────────────────────────────────
+#  MANUAL ENTRY WINDOW
+# ─────────────────────────────────────────────
+class ManualEntryWindow(ctk.CTkToplevel):
+    def __init__(self, parent, on_success_callback):
+        super().__init__(parent)
+        self.title("Create Knowledge Entry")
+        self.geometry("700x600")
+        self.grab_set()
+        self.on_success_callback = on_success_callback
+        
+        # Center the window
+        self.update_idletasks()
+        try:
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (700 // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (600 // 2)
+            self.geometry(f"+{x}+{y}")
+        except:
+            pass
+            
+        title_label = ctk.CTkLabel(self, text="Create Knowledge Entry", font=ctk.CTkFont(size=24, weight="bold"))
+        title_label.pack(pady=(30, 20), padx=40, anchor="w")
+        
+        main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        main_frame.pack(fill="both", expand=True, padx=40, pady=(0, 20))
+        
+        # Entry Title
+        ctk.CTkLabel(main_frame, text="ENTRY TITLE", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack(anchor="w", pady=(0, 5))
+        self.title_entry = ctk.CTkEntry(main_frame, placeholder_text="e.g., How to configure API environment variables", height=40)
+        self.title_entry.pack(fill="x", pady=(0, 20))
+        
+        # User Question
+        ctk.CTkLabel(main_frame, text="USER QUESTION", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack(anchor="w", pady=(0, 5))
+        self.question_entry = ctk.CTkEntry(main_frame, placeholder_text="State the question exactly as a user might ask it...", height=40)
+        self.question_entry.pack(fill="x", pady=(0, 20))
+        
+        # Detailed Answer
+        ctk.CTkLabel(main_frame, text="DETAILED ANSWER", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack(anchor="w", pady=(0, 5))
+        self.answer_box = ctk.CTkTextbox(main_frame, height=200, font=ctk.CTkFont(size=14))
+        self.answer_box.pack(fill="x", pady=(0, 20))
+        self.answer_box.insert("1.0", "Provide a clear, concise, and accurate answer...")
+        self.answer_box.bind("<FocusIn>", self._clear_placeholder)
+        
+        # Button frame
+        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=(10, 0))
+        
+        self.status_label = ctk.CTkLabel(btn_frame, text="", text_color="gray")
+        self.status_label.pack(side="left")
+        
+        publish_btn = ctk.CTkButton(btn_frame, text="Publish", height=40, width=120, font=ctk.CTkFont(weight="bold"), fg_color=("#0D47A1", "#1565C0"), command=self._save_entry)
+        publish_btn.pack(side="right", padx=(10, 0))
+        
+        cancel_btn = ctk.CTkButton(btn_frame, text="Cancel", height=40, width=120, fg_color="transparent", border_width=1, command=self.destroy)
+        cancel_btn.pack(side="right")
+        
+    def _clear_placeholder(self, event):
+        if self.answer_box.get("1.0", "end-1c") == "Provide a clear, concise, and accurate answer...":
+            self.answer_box.delete("1.0", "end")
+            
+    def _save_entry(self):
+        title = self.title_entry.get().strip()
+        question = self.question_entry.get().strip()
+        answer = self.answer_box.get("1.0", "end-1c").strip()
+        
+        if not title or not question or not answer or answer == "Provide a clear, concise, and accurate answer...":
+            self.status_label.configure(text="Please fill in all fields.", text_color="#FF6B6B")
+            return
+            
+        self.status_label.configure(text="Generating Embeddings & Saving...", text_color="gray")
+        self.update_idletasks()
+        
+        def task():
+            ok, msg = add_manual_entry(title, question, answer)
+            self.after(0, lambda: self._on_save_complete(ok, msg))
+            
+        threading.Thread(target=task, daemon=True).start()
+        
+    def _on_save_complete(self, ok, msg):
+        if ok:
+            self.on_success_callback()
+            self.destroy()
+        else:
+            self.status_label.configure(text=msg, text_color="#FF6B6B")
+
+
+# ─────────────────────────────────────────────
+#  VIEW SOURCE WINDOW
+# ─────────────────────────────────────────────
+class ViewSourceWindow(ctk.CTkToplevel):
+    def __init__(self, parent, source_name, content):
+        super().__init__(parent)
+        self.title(f"Viewing: {source_name}")
+        self.geometry("800x600")
+        self.grab_set()
+        
+        # Center the window
+        self.update_idletasks()
+        try:
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (800 // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (600 // 2)
+            self.geometry(f"+{x}+{y}")
+        except:
+            pass
+            
+        title_label = ctk.CTkLabel(self, text=f"📄 {source_name}", font=ctk.CTkFont(size=20, weight="bold"))
+        title_label.pack(pady=(20, 10), padx=20, anchor="w")
+        
+        self.textbox = ctk.CTkTextbox(self, font=ctk.CTkFont(size=14))
+        self.textbox.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        self.textbox.insert("1.0", content)
+        self.textbox.configure(state="disabled")
+        
+        close_btn = ctk.CTkButton(self, text="Close", height=36, width=120, command=self.destroy)
+        close_btn.pack(pady=(0, 20))
 
 
 # ─────────────────────────────────────────────
@@ -59,8 +176,14 @@ class AdminFrame(ctk.CTkFrame):
         sub_text = ctk.CTkLabel(self.upload_zone, text="Maximum file size: 50MB", font=ctk.CTkFont(size=12), text_color="gray")
         sub_text.pack(pady=(0, 10))
         
-        self.upload_btn = ctk.CTkButton(self.upload_zone, text="Browse Files", font=ctk.CTkFont(weight="bold"), fg_color=("#0097A7", "#006064"), hover_color=("#00838F", "#004D40"), command=self._upload_pdf)
-        self.upload_btn.pack(pady=(10, 10))
+        btn_frame = ctk.CTkFrame(self.upload_zone, fg_color="transparent")
+        btn_frame.pack(pady=(10, 10))
+        
+        self.upload_btn = ctk.CTkButton(btn_frame, text="Browse PDF", font=ctk.CTkFont(weight="bold"), fg_color=("#0097A7", "#006064"), hover_color=("#00838F", "#004D40"), command=self._upload_pdf)
+        self.upload_btn.pack(side="left", padx=10)
+        
+        self.manual_btn = ctk.CTkButton(btn_frame, text="Add Manually", font=ctk.CTkFont(weight="bold"), fg_color=("#1976D2", "#0D47A1"), hover_color=("#1565C0", "#002171"), command=self._open_manual)
+        self.manual_btn.pack(side="left", padx=10)
         
         self.status_label = ctk.CTkLabel(self.upload_zone, text="", text_color="gray", font=ctk.CTkFont(size=12))
         self.status_label.pack()
@@ -92,6 +215,8 @@ class AdminFrame(ctk.CTkFrame):
         self.entries_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
         self._refresh_entries()
+    def _open_manual(self):
+        ManualEntryWindow(self, self._refresh_entries)
 
     def _upload_pdf(self):
         file_path = ctk.filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
@@ -150,7 +275,14 @@ class AdminFrame(ctk.CTkFrame):
             # Actions
             action_frame = ctk.CTkFrame(row, fg_color="transparent")
             action_frame.grid(row=0, column=3, sticky="e", padx=15)
-            ctk.CTkButton(action_frame, text="🗑", width=30, height=30, fg_color="transparent", hover_color="gray30", command=lambda s=src: self._delete_single(s)).pack(side="right")
+            ctk.CTkButton(action_frame, text="👁", width=30, height=30, fg_color="transparent", hover_color="gray30", command=lambda s=src: self._view_single(s)).pack(side="left", padx=(0, 5))
+            ctk.CTkButton(action_frame, text="🗑", width=30, height=30, fg_color="transparent", hover_color="gray30", command=lambda s=src: self._delete_single(s)).pack(side="left")
+
+    def _view_single(self, src):
+        content = get_source_content(src)
+        if not content:
+            content = "No content found for this entry."
+        ViewSourceWindow(self, src, content)
 
     def _delete_single(self, src):
         if messagebox.askyesno("Delete", f"Are you sure you want to delete '{src}'?"):

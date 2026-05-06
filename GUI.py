@@ -440,14 +440,11 @@ class HomeFrame(ctk.CTkFrame):
         btn_container = ctk.CTkFrame(self, fg_color="transparent")
         btn_container.grid(row=1, column=0, pady=40)
 
-        self._make_menu_card(btn_container, "❓", "Help", "Get automated assistance\n& usage tips", 
-                            lambda: controller.show_frame(HelpFrame)).grid(row=0, column=0, padx=20)
-        
-        self._make_menu_card(btn_container, "🤖", "Ask AI", "Chat with your local\noffline models", 
-                            lambda: controller.show_frame(ChatFrame)).grid(row=0, column=1, padx=20)
+        self._make_menu_card(btn_container, "🤖", "Chat & Help", "Chat with AI and\nget automated assistance", 
+                            lambda: controller.show_frame(ChatFrame)).grid(row=0, column=0, padx=20)
 
         self._make_menu_card(btn_container, "ℹ️", "Info", "Learn more about the\napps capabilities", 
-                            lambda: controller.show_frame(InfoFrame)).grid(row=0, column=2, padx=20)
+                            lambda: controller.show_frame(InfoFrame)).grid(row=0, column=1, padx=20)
 
         ctk.CTkButton(self, text="⇠ Logout", width=120, height=36, fg_color="transparent", border_width=1,
                       text_color=("#CC0000", "#FF6B6B"), border_color=("#CC0000", "#FF6B6B"),
@@ -462,79 +459,6 @@ class HomeFrame(ctk.CTkFrame):
         ctk.CTkButton(card, text="Open", width=180, height=40, font=ctk.CTkFont(weight="bold"), 
                       corner_radius=10, command=command).pack(side="bottom", pady=40)
         return card
-
-
-# ─────────────────────────────────────────────
-#  RE-USABLE FRAME: HELP (AUTOMATED)
-# ─────────────────────────────────────────────
-class HelpFrame(ctk.CTkFrame):
-    def __init__(self, parent, controller):
-        super().__init__(parent, fg_color="transparent")
-        self.controller = controller
-
-        self.sidebar = NavigationSidebar(self, controller)
-        self.sidebar.pack(side="left", fill="y")
-
-        content = ctk.CTkFrame(self, corner_radius=20)
-        content.pack(side="right", fill="both", expand=True, padx=40, pady=40)
-
-        self.chat_scroll = ctk.CTkScrollableFrame(content, fg_color="transparent")
-        self.chat_scroll.pack(fill="both", expand=True, padx=20, pady=20)
-
-        self.options_frame = None
-        self._show_initial_help()
-
-    def _add_bubble(self, sender, text, is_system=True):
-        bg_color = ("gray85", "gray20") if is_system else ("#0097A7", "#006064")
-        text_color = ("black", "white") if is_system else "white"
-        
-        bubble_frame = ctk.CTkFrame(self.chat_scroll, fg_color=bg_color, corner_radius=15)
-        
-        anchor = "w" if is_system else "e"
-        padx = (10, 100) if is_system else (100, 10)
-        
-        bubble_frame.pack(anchor=anchor, padx=padx, pady=8)
-
-        lbl = ctk.CTkLabel(bubble_frame, text=f"{sender}:\n{text}", font=ctk.CTkFont(size=14), justify="left", text_color=text_color)
-        lbl.pack(padx=15, pady=10)
-
-        self.after(50, lambda: self.chat_scroll._parent_canvas.yview_moveto(1.0))
-        return bubble_frame
-
-    def _show_options(self):
-        if self.options_frame:
-            self.options_frame.destroy()
-            
-        self.options_frame = ctk.CTkFrame(self.chat_scroll, fg_color="transparent")
-        self.options_frame.pack(anchor="w", padx=(10, 100), pady=(0, 10))
-
-        options = ["How to Start a Chat", "Privacy & Data"]
-        for opt in options:
-            btn = ctk.CTkButton(self.options_frame, text=opt, height=34, corner_radius=17,
-                                fg_color="transparent", border_width=1, border_color="#0097A7",
-                                text_color=("#0097A7", "#4DD0E1"), hover_color=("#E0F7FA", "#004D40"),
-                                command=lambda o=opt: self._handle_help_req(o))
-            btn.pack(anchor="w", pady=4)
-        
-        self.after(50, lambda: self.chat_scroll._parent_canvas.yview_moveto(1.0))
-
-    def _show_initial_help(self):
-        self._add_bubble("System", "Hello! How can I assist you today? Please choose an option below:", is_system=True)
-        self._show_options()
-
-    def _handle_help_req(self, topic):
-        if self.options_frame:
-            self.options_frame.destroy()
-            self.options_frame = None
-
-        self._add_bubble("You", topic, is_system=False)
-        responses = {
-            "How to Start a Chat": "Go to 'Ask AI' from the dashboard. Click 'New Chat' to start or select an old one from the sidebar.",
-            "Managing Knowledge Base": "In 'Ask AI', click 'Knowledge Base'. Add titles and content to provide the AI with custom local data.",
-            "Privacy & Data": "ChatOff runs entirely on your local machine. No data is sent to the internet. Your chats are stored in your MySQL db.",
-        }
-        self.after(300, lambda: self._add_bubble("System", responses.get(topic, "I don't have info on that yet."), is_system=True))
-        self.after(800, self._show_options)
 
 
 # ─────────────────────────────────────────────
@@ -571,17 +495,24 @@ class ChatFrame(ctk.CTkFrame):
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=0)
+        self.grid_rowconfigure(2, weight=0)
 
         self.sidebar = NavigationSidebar(self, controller, 
                                          new_chat_cmd=self.start_new_chat,
                                          load_session_cmd=self.load_session)
-        self.sidebar.grid(row=0, column=0, rowspan=2, sticky="nsew")
+        self.sidebar.grid(row=0, column=0, rowspan=3, sticky="nsew")
 
         self.chat_area = ctk.CTkTextbox(self, font=ctk.CTkFont(size=14), state="disabled")
         self.chat_area.grid(row=0, column=1, padx=20, pady=(20, 0), sticky="nsew")
 
+        # Quick options frame
+        self.options_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.options_frame.grid(row=1, column=1, padx=20, pady=(10, 0), sticky="ew")
+        self._populate_options()
+
         self.input_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.input_frame.grid(row=1, column=1, padx=20, pady=20, sticky="ew")
+        self.input_frame.grid(row=2, column=1, padx=20, pady=20, sticky="ew")
         self.input_frame.grid_columnconfigure(0, weight=1)
         self.entry = ctk.CTkEntry(self.input_frame, placeholder_text="Type a message...", height=42)
         self.entry.grid(row=0, column=0, padx=(0, 10), sticky="ew")
@@ -594,15 +525,43 @@ class ChatFrame(ctk.CTkFrame):
         self.stop_btn.grid(row=0, column=2, padx=(10, 0))
         self.stop_generation_flag = False
 
+    def _populate_options(self):
+        for w in self.options_frame.winfo_children(): w.destroy()
+        
+        options = ["How to Start a Chat", "Privacy & Data", "Managing Knowledge Base", "What models are supported?"]
+        
+        row_idx, col_idx, max_cols = 0, 0, 2
+        for opt in options:
+            btn = ctk.CTkButton(self.options_frame, text=opt, height=36, corner_radius=18,
+                                fg_color="transparent", border_width=1, border_color="#0097A7",
+                                text_color=("#0097A7", "#4DD0E1"), hover_color=("#E0F7FA", "#004D40"),
+                                command=lambda o=opt: self._send_option(o))
+            btn.grid(row=row_idx, column=col_idx, padx=5, pady=5, sticky="ew")
+            self.options_frame.grid_columnconfigure(col_idx, weight=1)
+            
+            col_idx += 1
+            if col_idx >= max_cols:
+                col_idx = 0
+                row_idx += 1
+
+    def _send_option(self, text):
+        self.entry.delete(0, "end")
+        self.entry.insert(0, text)
+        self._send()
+
     def start_new_chat(self):
         self.current_session_id = str(uuid.uuid4())
         self.chat_area.configure(state="normal")
         self.chat_area.delete("1.0", "end")
         self.chat_area.insert("end", "✨ New chat session started.\n\n", "italic")
+        self.chat_area.insert("end", "System: ", "bold")
+        self.chat_area.insert("end", "Hello! How can I assist you today? You can choose an option below or type your question.\n\n")
         self.chat_area.see("end")
         self.chat_area.configure(state="disabled")
+        self.options_frame.grid()
 
     def load_session(self, session_id):
+        self.options_frame.grid_remove()
         self.current_session_id = session_id
         messages = load_session_messages(self.controller.username, session_id)
         self.chat_area.configure(state="normal")
@@ -621,6 +580,8 @@ class ChatFrame(ctk.CTkFrame):
     def _send(self):
         msg = self.entry.get().strip()
         if not msg: return
+        
+        self.options_frame.grid_remove()
         
         is_first_msg = (self.current_session_id is None)
         if is_first_msg: self.current_session_id = str(uuid.uuid4())
@@ -736,7 +697,7 @@ class OfflineChatbot(ctk.CTk):
             frame.grid(row=0, column=0, sticky="nsew")
             self.show_frame(AdminFrame)
         else:
-            for F in (HomeFrame, ChatFrame, HelpFrame, InfoFrame):
+            for F in (HomeFrame, ChatFrame, InfoFrame):
                 frame = F(self.container, self)
                 self.frames[F] = frame
                 frame.grid(row=0, column=0, sticky="nsew")

@@ -14,7 +14,7 @@ from auth import (
     update_session_title
 )
 import os
-from rag import process_pdf, get_all_sources, delete_source, clear_rag, query_rag, add_manual_entry, get_source_content
+from rag import process_pdf, get_all_sources, delete_source, clear_rag, query_rag, add_manual_entry, get_source_content, save_unanswered_question
 
 # Set UI theme
 ctk.set_appearance_mode("Dark")
@@ -139,6 +139,68 @@ class ViewSourceWindow(ctk.CTkToplevel):
 
 
 # ─────────────────────────────────────────────
+#  UNANSWERED QUESTIONS WINDOW
+# ─────────────────────────────────────────────
+class UnansweredQuestionsWindow(ctk.CTkToplevel):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.title("Unanswered Questions")
+        self.geometry("800x600")
+        self.grab_set()
+        self.controller = controller
+        
+        # Center the window
+        self.update_idletasks()
+        try:
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (800 // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (600 // 2)
+            self.geometry(f"+{x}+{y}")
+        except:
+            pass
+            
+        title_label = ctk.CTkLabel(self, text="❓ Unanswered Questions", font=ctk.CTkFont(size=20, weight="bold"))
+        title_label.pack(pady=(20, 10), padx=20, anchor="w")
+        
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.scroll.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        
+        self._refresh()
+
+    def _refresh(self):
+        for w in self.scroll.winfo_children(): w.destroy()
+        from rag import get_unanswered_questions, delete_unanswered_question
+        questions = get_unanswered_questions()
+        
+        if not questions:
+            ctk.CTkLabel(self.scroll, text="No unanswered questions. Great job!", text_color="gray").pack(pady=40)
+            return
+            
+        for q in questions:
+            row = ctk.CTkFrame(self.scroll, corner_radius=8, fg_color=("gray85", "gray15"))
+            row.pack(fill="x", pady=5)
+            
+            lbl = ctk.CTkLabel(row, text=q["question"], font=ctk.CTkFont(size=14), wraplength=500, justify="left")
+            lbl.pack(side="left", padx=15, pady=10, fill="x", expand=True)
+            
+            date_lbl = ctk.CTkLabel(row, text=q.get("date", ""), font=ctk.CTkFont(size=11), text_color="gray")
+            date_lbl.pack(side="left", padx=10)
+            
+            def answer_cmd(q_text=q["question"], q_id=q["id"]):
+                def on_success():
+                    delete_unanswered_question(q_id)
+                    self._refresh()
+                    # Also refresh the admin's documents table behind this
+                    if hasattr(self.controller, 'frames') and AdminFrame in self.controller.frames:
+                        self.controller.frames[AdminFrame]._refresh_entries()
+                win = ManualEntryWindow(self, on_success)
+                win.question_entry.insert(0, q_text)
+                win.title_entry.insert(0, f"Answer to: {q_text[:30]}")
+
+            ans_btn = ctk.CTkButton(row, text="Answer", width=80, command=answer_cmd)
+            ans_btn.pack(side="right", padx=10)
+
+
+# ─────────────────────────────────────────────
 #  ADMIN DASHBOARD FRAME
 # ─────────────────────────────────────────────
 class AdminFrame(ctk.CTkFrame):
@@ -164,7 +226,7 @@ class AdminFrame(ctk.CTkFrame):
         ctk.CTkLabel(title_frame, text="Upload and manage PDF documents to power the AI responses.", font=ctk.CTkFont(size=14), text_color="gray").pack(anchor="w")
 
         # Upload Zone (Large dashed-like area)
-        self.upload_zone = ctk.CTkFrame(self, corner_radius=15, border_width=2, border_color="gray30", fg_color="gray10")
+        self.upload_zone = ctk.CTkFrame(self, corner_radius=15, border_width=2, border_color=("gray70", "gray30"), fg_color=("gray90", "gray10"))
         self.upload_zone.pack(fill="x", padx=60, pady=(10, 30), ipady=20)
         
         icon_label = ctk.CTkLabel(self.upload_zone, text="📄", font=ctk.CTkFont(size=40))
@@ -189,17 +251,18 @@ class AdminFrame(ctk.CTkFrame):
         self.status_label.pack()
 
         # Documents Table area
-        table_container = ctk.CTkFrame(self, corner_radius=15, fg_color="gray15")
+        table_container = ctk.CTkFrame(self, corner_radius=15, fg_color=("gray95", "gray15"))
         table_container.pack(fill="both", expand=True, padx=40, pady=(0, 30))
         
         table_header_top = ctk.CTkFrame(table_container, fg_color="transparent")
         table_header_top.pack(fill="x", padx=20, pady=(15, 10))
         self.doc_count_label = ctk.CTkLabel(table_header_top, text="Uploaded Documents (0)", font=ctk.CTkFont(size=16, weight="bold"))
         self.doc_count_label.pack(side="left")
-        ctk.CTkButton(table_header_top, text="Clear All", width=80, height=28, fg_color="gray30", hover_color="gray20", command=self._clear_all).pack(side="right")
+        ctk.CTkButton(table_header_top, text="Clear All", width=80, height=28, fg_color=("gray80", "gray30"), hover_color=("gray70", "gray20"), text_color=("black", "white"), command=self._clear_all).pack(side="right")
+        ctk.CTkButton(table_header_top, text="Unanswered Questions", width=140, height=28, fg_color=("#F57C00", "#E65100"), hover_color=("#EF6C00", "#BF360C"), command=self._open_unanswered).pack(side="right", padx=(0, 10))
         
         # Columns
-        col_frame = ctk.CTkFrame(table_container, fg_color="gray20", corner_radius=8)
+        col_frame = ctk.CTkFrame(table_container, fg_color=("gray85", "gray20"), corner_radius=8)
         col_frame.pack(fill="x", padx=(10, 26), pady=(0, 10))
         col_frame.grid_columnconfigure(0, weight=1)
         col_frame.grid_columnconfigure(1, minsize=250, weight=0)
@@ -215,6 +278,10 @@ class AdminFrame(ctk.CTkFrame):
         self.entries_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
         self._refresh_entries()
+        
+    def _open_unanswered(self):
+        UnansweredQuestionsWindow(self, self.controller)
+        
     def _open_manual(self):
         ManualEntryWindow(self, self._refresh_entries)
 
@@ -251,7 +318,7 @@ class AdminFrame(ctk.CTkFrame):
             return
             
         for i, (src, meta) in enumerate(sources_info):
-            bg_color = "gray15" if i % 2 == 0 else "gray12"
+            bg_color = ("gray95", "gray15") if i % 2 == 0 else ("gray90", "gray12")
             row = ctk.CTkFrame(self.entries_frame, corner_radius=0, fg_color=bg_color)
             row.pack(fill="x")
             
@@ -275,8 +342,8 @@ class AdminFrame(ctk.CTkFrame):
             # Actions
             action_frame = ctk.CTkFrame(row, fg_color="transparent")
             action_frame.grid(row=0, column=3, sticky="e", padx=15)
-            ctk.CTkButton(action_frame, text="👁", width=30, height=30, fg_color="transparent", hover_color="gray30", command=lambda s=src: self._view_single(s)).pack(side="left", padx=(0, 5))
-            ctk.CTkButton(action_frame, text="🗑", width=30, height=30, fg_color="transparent", hover_color="gray30", command=lambda s=src: self._delete_single(s)).pack(side="left")
+            ctk.CTkButton(action_frame, text="👁", width=30, height=30, fg_color="transparent", hover_color=("gray80", "gray30"), text_color=("black", "white"), command=lambda s=src: self._view_single(s)).pack(side="left", padx=(0, 5))
+            ctk.CTkButton(action_frame, text="🗑", width=30, height=30, fg_color="transparent", hover_color=("gray80", "gray30"), text_color=("black", "white"), command=lambda s=src: self._delete_single(s)).pack(side="left")
 
     def _view_single(self, src):
         content = get_source_content(src)
@@ -569,6 +636,26 @@ class ChatFrame(ctk.CTkFrame):
     def _process_ai(self, prompt, is_first_msg):
         model = "llama3"
         sys = query_rag(prompt)
+        
+        if sys is None:
+            # Fallback logic
+            save_unanswered_question(prompt)
+            fallback_msg = "Sorry, no answer found yet. We'll update this soon."
+            self.controller.after(0, lambda: (
+                self.chat_area.configure(state="normal"),
+                self.chat_area.insert("end", "Bot: ", "bold"),
+                self.chat_area.insert("end", fallback_msg + "\n\n"),
+                self.chat_area.see("end"),
+                self.chat_area.configure(state="disabled"),
+                self.send_btn.configure(state="normal"),
+                self.stop_btn.configure(state="disabled")
+            ))
+            save_message(self.controller.username, self.current_session_id, prompt, fallback_msg)
+            self.controller.after(0, lambda: self.sidebar.refresh_sessions())
+            if is_first_msg:
+                threading.Thread(target=self._generate_catchy_title, args=(prompt,), daemon=True).start()
+            return
+            
         collected = []
         try:
             self.controller.after(0, lambda: (self.chat_area.configure(state="normal"), self.chat_area.insert("end", "Bot: ", "bold")))

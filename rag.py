@@ -107,17 +107,21 @@ def add_manual_entry(title, question, answer):
     save_db(db)
     return True, f"Successfully added manual entry: {title}"
 
-def query_rag(prompt, top_k=3):
+def query_rag(prompt, top_k=3, threshold=0.65):
     db = load_db()
     if not db["chunks"]:
-        return ""
+        return None
         
     prompt_emb = get_embedding(prompt)
     
     scores = []
     for i, emb in enumerate(db["embeddings"]):
         score = cosine_similarity(prompt_emb, emb)
-        scores.append((score, db["chunks"][i]))
+        if score >= threshold:
+            scores.append((score, db["chunks"][i]))
+            
+    if not scores:
+        return None
         
     scores.sort(key=lambda x: x[0], reverse=True)
     
@@ -154,3 +158,38 @@ def delete_source(source_name):
 def clear_rag():
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
+
+UNANSWERED_DB_PATH = "unanswered_db.json"
+
+def load_unanswered_db():
+    if os.path.exists(UNANSWERED_DB_PATH):
+        with open(UNANSWERED_DB_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def save_unanswered_db(db):
+    with open(UNANSWERED_DB_PATH, "w", encoding="utf-8") as f:
+        json.dump(db, f)
+
+def save_unanswered_question(question):
+    import uuid
+    db = load_unanswered_db()
+    # avoid duplicates
+    if any(q["question"].lower() == question.lower() for q in db):
+        return
+    entry = {
+        "id": str(uuid.uuid4()),
+        "question": question,
+        "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    db.append(entry)
+    save_unanswered_db(db)
+
+def get_unanswered_questions():
+    return load_unanswered_db()
+
+def delete_unanswered_question(q_id):
+    db = load_unanswered_db()
+    db = [q for q in db if q["id"] != q_id]
+    save_unanswered_db(db)
+

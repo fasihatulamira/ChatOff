@@ -443,7 +443,7 @@ class HomeFrame(ctk.CTkFrame):
         self._make_menu_card(btn_container, "🤖", "Chat & Help", "Chat with AI and\nget automated assistance", 
                             lambda: controller.show_frame(ChatFrame)).grid(row=0, column=0, padx=20)
 
-        self._make_menu_card(btn_container, "ℹ️", "Info", "Learn more about the\napps capabilities", 
+        self._make_menu_card(btn_container, "💡", "Info", "Learn more about the\napps capabilities", 
                             lambda: controller.show_frame(InfoFrame)).grid(row=0, column=1, padx=20)
 
         ctk.CTkButton(self, text="⇠ Logout", width=120, height=36, fg_color="transparent", border_width=1,
@@ -453,9 +453,9 @@ class HomeFrame(ctk.CTkFrame):
     def _make_menu_card(self, parent, icon, title, desc, command):
         card = ctk.CTkFrame(parent, width=280, height=320, corner_radius=20)
         card.grid_propagate(False)
-        ctk.CTkLabel(card, text=icon, font=ctk.CTkFont(size=60)).pack(pady=(40, 10))
-        ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=24, weight="bold")).pack(pady=5)
-        ctk.CTkLabel(card, text=desc, font=ctk.CTkFont(size=13), text_color="gray", justify="center").pack(pady=10)
+        ctk.CTkLabel(card, text=icon, font=ctk.CTkFont(size=60), anchor="center").pack(pady=(40, 10), fill="x")
+        ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=24, weight="bold"), anchor="center").pack(pady=5, fill="x")
+        ctk.CTkLabel(card, text=desc, font=ctk.CTkFont(size=13), text_color="gray", justify="center", anchor="center").pack(pady=10, fill="x")
         ctk.CTkButton(card, text="Open", width=180, height=40, font=ctk.CTkFont(weight="bold"), 
                       corner_radius=10, command=command).pack(side="bottom", pady=40)
         return card

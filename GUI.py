@@ -453,9 +453,9 @@ class HomeFrame(ctk.CTkFrame):
     def _make_menu_card(self, parent, icon, title, desc, command):
         card = ctk.CTkFrame(parent, width=280, height=320, corner_radius=20)
         card.grid_propagate(False)
-        ctk.CTkLabel(card, text=icon, font=ctk.CTkFont(size=60), anchor="center").pack(pady=(40, 10), fill="x")
-        ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=24, weight="bold"), anchor="center").pack(pady=5, fill="x")
-        ctk.CTkLabel(card, text=desc, font=ctk.CTkFont(size=13), text_color="gray", justify="center", anchor="center").pack(pady=10, fill="x")
+        ctk.CTkLabel(card, text=icon, font=ctk.CTkFont(size=60)).pack(pady=(40, 10))
+        ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=24, weight="bold")).pack(pady=5)
+        ctk.CTkLabel(card, text=desc, font=ctk.CTkFont(size=13), text_color="gray", justify="center").pack(pady=10)
         ctk.CTkButton(card, text="Open", width=180, height=40, font=ctk.CTkFont(weight="bold"), 
                       corner_radius=10, command=command).pack(side="bottom", pady=40)
         return card
@@ -554,8 +554,8 @@ class ChatFrame(ctk.CTkFrame):
         self.chat_area.configure(state="normal")
         self.chat_area.delete("1.0", "end")
         self.chat_area.insert("end", "✨ New chat session started.\n\n", "italic")
-        self.chat_area.insert("end", "System: ", "bold")
-        self.chat_area.insert("end", "Hello! How can I assist you today? You can choose an option below or type your question.\n\n")
+        self.chat_area.insert("end", "Bot: ", "bold")
+        self.chat_area.insert("end", "Hi, may I help you? You can choose an option below or type your question.\n\n")
         self.chat_area.see("end")
         self.chat_area.configure(state="disabled")
         self.options_frame.grid()
@@ -704,9 +704,14 @@ class OfflineChatbot(ctk.CTk):
             self.show_frame(HomeFrame)
 
     def show_frame(self, frame_class):
-        if hasattr(self.frames[frame_class], "sidebar"):
-            self.frames[frame_class].sidebar.refresh_sessions()
-        self.frames[frame_class].tkraise()
+        frame = self.frames[frame_class]
+        if hasattr(frame, "sidebar"):
+            frame.sidebar.refresh_sessions()
+            
+        if frame_class == ChatFrame and getattr(frame, "current_session_id", None) is None:
+            frame.start_new_chat()
+            
+        frame.tkraise()
 
     def _logout(self):
         from login import LoginWindow

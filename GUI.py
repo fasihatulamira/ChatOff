@@ -11,7 +11,8 @@ from chatbot import get_response
 from auth import (
     save_message, clear_history,
     get_user_sessions, load_session_messages,
-    update_session_title
+    update_session_title, save_topic, get_main_topics, get_sub_topics,
+    get_all_topics, delete_topic, update_topic
 )
 import os
 from rag import process_pdf, get_all_sources, delete_source, clear_rag, query_rag, add_manual_entry, get_source_content, save_unanswered_question
@@ -105,6 +106,299 @@ class ManualEntryWindow(ctk.CTkToplevel):
             self.destroy()
         else:
             self.status_label.configure(text=msg, text_color="#FF6B6B")
+
+
+# ─────────────────────────────────────────────
+#  AI TOPIC BUILDER WINDOW
+# ─────────────────────────────────────────────
+import json
+import PyPDF2
+class TopicBuilderWindow(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("AI Topic Profile Builder")
+        self.geometry("750x650")
+        self.grab_set()
+        
+        self.update_idletasks()
+        try:
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (750 // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (650 // 2)
+            self.geometry(f"+{x}+{y}")
+        except:
+            pass
+            
+        title_label = ctk.CTkLabel(self, text="✨ AI Topic Profile Builder", font=ctk.CTkFont(size=24, weight="bold"), text_color="#E040FB")
+        title_label.pack(pady=(30, 10), padx=40, anchor="w")
+        ctk.CTkLabel(self, text="Tell the AI what the topic is about, or load a PDF, and select the sub-topics to save.", text_color="gray").pack(padx=40, anchor="w", pady=(0,20))
+        
+        self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_frame.pack(fill="both", expand=True, padx=40, pady=(0, 20))
+        
+        ctk.CTkLabel(self.main_frame, text="MAIN TOPIC NAME", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack(anchor="w", pady=(0, 5))
+        self.topic_entry = ctk.CTkEntry(self.main_frame, placeholder_text="e.g., Food", height=40)
+        self.topic_entry.pack(fill="x", pady=(0, 20))
+        
+        header_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        header_frame.pack(fill="x", pady=(0, 5))
+        ctk.CTkLabel(header_frame, text="KNOWLEDGE CONTEXT (Paste text or load PDF)", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack(side="left")
+        
+        self.browse_btn = ctk.CTkButton(header_frame, text="Browse PDF", width=100, height=28, command=self._load_pdf, fg_color=("#0097A7", "#006064"))
+        self.browse_btn.pack(side="right")
+        
+        self.content_box = ctk.CTkTextbox(self.main_frame, height=200, font=ctk.CTkFont(size=14))
+        self.content_box.pack(fill="x", pady=(0, 20))
+        self.content_box.insert("1.0", "e.g., The sub-topics should be Beverages, Main Course, and Desserts. Use this PDF text to base the answers on...")
+        self.content_box.bind("<FocusIn>", self._clear_placeholder)
+        
+        self.btn_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.btn_frame.pack(fill="x", pady=(10, 0))
+        
+        self.status_label = ctk.CTkLabel(self.btn_frame, text="", text_color="gray")
+        self.status_label.pack(side="left")
+        
+        self.publish_btn = ctk.CTkButton(self.btn_frame, text="✨ Auto-Generate", height=40, width=150, font=ctk.CTkFont(weight="bold"), fg_color=("#8E24AA", "#6A1B9A"), hover_color=("#7B1FA2", "#4A148C"), command=self._generate_subtopics)
+        self.publish_btn.pack(side="right", padx=(10, 0))
+        
+        cancel_btn = ctk.CTkButton(self.btn_frame, text="Cancel", height=40, width=100, fg_color="transparent", border_width=1, command=self.destroy)
+        cancel_btn.pack(side="right")
+
+    def _load_pdf(self):
+        file_path = ctk.filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
+        if not file_path: return
+        try:
+            with open(file_path, "rb") as f:
+                reader = PyPDF2.PdfReader(f)
+                text = ""
+                for page in reader.pages:
+                    extracted = page.extract_text()
+                    if extracted: text += extracted + "\n"
+            self.content_box.delete("1.0", "end")
+            self.content_box.insert("end", text)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read PDF: {e}")
+        
+    def _clear_placeholder(self, event):
+        if "The sub-topics should be" in self.content_box.get("1.0", "end-1c"):
+            self.content_box.delete("1.0", "end")
+            
+    def _generate_subtopics(self):
+        topic_name = self.topic_entry.get().strip()
+        content = self.content_box.get("1.0", "end-1c").strip()
+        
+        if not topic_name or not content or "The sub-topics should be" in content:
+            self.status_label.configure(text="Please fill in both fields.", text_color="#FF6B6B")
+            return
+            
+        self.status_label.configure(text="AI is analyzing and building...", text_color="#E040FB")
+        self.publish_btn.configure(state="disabled")
+        self.update_idletasks()
+        
+        def task():
+            prompt = (
+                f"You are an AI that structures conversation topics.\n"
+                f"The user is creating a main topic called '{topic_name}'.\n"
+                f"Based on the following content, extract the logical sub-topics.\n"
+                f"For each sub-topic, write a helpful reply message that the bot should say when the user clicks it.\n"
+                f"Respond ONLY with a valid JSON array like [{{\"topic_name\": \"...\", \"reply_message\": \"...\"}}]. Do not write any markdown code blocks or extra text.\n\n"
+                f"Content: {content}"
+            )
+            
+            try:
+                # get_response from chatbot.py yields text
+                gen = get_response(prompt, "llama3", system_prompt="You only output raw JSON arrays.")
+                ai_output = "".join(list(gen)).strip()
+                
+                # Clean up if AI hallucinates markdown
+                if ai_output.startswith("```json"): ai_output = ai_output[7:]
+                if ai_output.startswith("```"): ai_output = ai_output[3:]
+                if ai_output.endswith("```"): ai_output = ai_output[:-3]
+                    
+                subtopics = json.loads(ai_output)
+                if not isinstance(subtopics, list): raise ValueError("AI did not return a list.")
+                
+                self.generated_subtopics = subtopics
+                self.main_topic_name = topic_name
+                self.after(0, lambda: self._show_checkboxes())
+                
+            except Exception as e:
+                self.after(0, lambda e=e: self._on_fail(str(e)))
+                
+        threading.Thread(target=task, daemon=True).start()
+        
+    def _show_checkboxes(self):
+        self.status_label.configure(text="Select the subtopics to save:", text_color="white")
+        self.content_box.pack_forget()
+        self.browse_btn.pack_forget()
+        
+        self.checkbox_frame = ctk.CTkScrollableFrame(self.main_frame, height=200, fg_color=("gray95", "gray15"))
+        self.checkbox_frame.pack(fill="x", pady=(0, 20), before=self.btn_frame)
+        
+        self.checkbox_vars = []
+        for st in self.generated_subtopics:
+            var = ctk.StringVar(value="on")
+            short_reply = st.get('reply_message', '')[:60] + "..." if len(st.get('reply_message', '')) > 60 else st.get('reply_message', '')
+            cb_text = f"✅ {st.get('topic_name')}  (Reply: {short_reply})"
+            cb = ctk.CTkCheckBox(self.checkbox_frame, text=cb_text, variable=var, onvalue="on", offvalue="off", font=ctk.CTkFont(size=12))
+            cb.pack(anchor="w", pady=8, padx=10)
+            self.checkbox_vars.append((var, st))
+            
+        self.publish_btn.configure(text="Save Selected", state="normal", command=self._final_save)
+
+    def _final_save(self):
+        selected_subtopics = [st for var, st in self.checkbox_vars if var.get() == "on"]
+        if not selected_subtopics:
+            self.status_label.configure(text="No subtopics selected.", text_color="#FF6B6B")
+            return
+            
+        # Save Main Topic
+        parent_id = save_topic(None, self.main_topic_name, f"You selected {self.main_topic_name}. Please choose a sub-topic:")
+        if parent_id == -1:
+            self._on_fail("Failed to save to database.")
+            return
+            
+        # Save Selected Sub-topics
+        for st in selected_subtopics:
+            save_topic(parent_id, st.get("topic_name", "Unknown"), st.get("reply_message", ""))
+            
+        messagebox.showinfo("Success", "Topic and Selected Sub-topics created successfully!")
+        self.destroy()
+
+    def _on_fail(self, error_msg):
+        self.status_label.configure(text="AI generation failed. Try again.", text_color="#FF6B6B")
+        self.publish_btn.configure(state="normal")
+        print(f"Topic Builder Error: {error_msg}")
+
+
+
+
+# ─────────────────────────────────────────────
+#  MANAGE TOPICS WINDOW
+# ─────────────────────────────────────────────
+class ManageTopicsWindow(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Manage Topics")
+        self.geometry("800x600")
+        self.grab_set()
+        
+        self.update_idletasks()
+        try:
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (800 // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (600 // 2)
+            self.geometry(f"+{x}+{y}")
+        except:
+            pass
+            
+        title_label = ctk.CTkLabel(self, text="📋 Manage Topics", font=ctk.CTkFont(size=24, weight="bold"), text_color="#F57C00")
+        title_label.pack(pady=(20, 10), padx=20, anchor="w")
+        
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.scroll.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        
+        self._refresh()
+
+    def _refresh(self):
+        for w in self.scroll.winfo_children(): w.destroy()
+        topics = get_main_topics()
+        
+        if not topics:
+            ctk.CTkLabel(self.scroll, text="No topics found.", text_color="gray").pack(pady=40)
+            return
+            
+        for t in topics:
+            row = ctk.CTkFrame(self.scroll, corner_radius=8, fg_color=("gray85", "gray15"))
+            row.pack(fill="x", pady=5)
+            
+            info_frame = ctk.CTkFrame(row, fg_color="transparent")
+            info_frame.pack(side="left", fill="x", expand=True, padx=15, pady=10)
+            
+            ctk.CTkLabel(info_frame, text=f"{t['topic_name']}", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w")
+            ctk.CTkLabel(info_frame, text=f"Type: Main Topic | Reply: {t['reply_message'][:50]}...", font=ctk.CTkFont(size=11), text_color="gray").pack(anchor="w")
+            
+            def edit_cmd(topic=t):
+                self._open_edit_group(topic)
+                
+            def delete_cmd(topic_id=t['id'], name=t['topic_name']):
+                if messagebox.askyesno("Delete", f"Are you sure you want to delete '{name}' and all its subtopics?"):
+                    delete_topic(topic_id)
+                    self._refresh()
+                    
+            ctk.CTkButton(row, text="Edit Group", width=80, fg_color=("#1976D2", "#0D47A1"), command=edit_cmd).pack(side="right", padx=10)
+            ctk.CTkButton(row, text="Delete", width=60, fg_color="#D32F2F", hover_color="#B71C1C", command=delete_cmd).pack(side="right", padx=(0, 10))
+
+    def _open_edit_group(self, main_topic):
+        edit_win = ctk.CTkToplevel(self)
+        edit_win.title(f"Editing Topic Group: {main_topic['topic_name']}")
+        edit_win.geometry("700x650")
+        edit_win.grab_set()
+        
+        try:
+            x = self.winfo_x() + (self.winfo_width() // 2) - (700 // 2)
+            y = self.winfo_y() + (self.winfo_height() // 2) - (650 // 2)
+            edit_win.geometry(f"+{x}+{y}")
+        except:
+            pass
+            
+        scroll = ctk.CTkScrollableFrame(edit_win, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        ctk.CTkLabel(scroll, text="Main Topic", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0,5))
+        main_frame = ctk.CTkFrame(scroll, fg_color=("gray90", "gray10"))
+        main_frame.pack(fill="x", pady=(0, 20))
+        
+        ctk.CTkLabel(main_frame, text="Name:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        main_name_entry = ctk.CTkEntry(main_frame, width=200)
+        main_name_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+        main_name_entry.insert(0, main_topic['topic_name'])
+        
+        ctk.CTkLabel(main_frame, text="Reply:").grid(row=1, column=0, padx=10, pady=10, sticky="nw")
+        main_reply_box = ctk.CTkTextbox(main_frame, height=60, width=400)
+        main_reply_box.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+        main_reply_box.insert("1.0", main_topic['reply_message'])
+        
+        ctk.CTkLabel(scroll, text="Sub-Topics", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0,5))
+        
+        sub_topics = get_sub_topics(main_topic['id'])
+        sub_widgets = []
+        
+        for st in sub_topics:
+            sf = ctk.CTkFrame(scroll, fg_color=("gray90", "gray10"))
+            sf.pack(fill="x", pady=(0, 10))
+            
+            ctk.CTkLabel(sf, text="Name:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+            sne = ctk.CTkEntry(sf, width=200)
+            sne.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+            sne.insert(0, st['topic_name'])
+            
+            ctk.CTkLabel(sf, text="Reply:").grid(row=1, column=0, padx=10, pady=10, sticky="nw")
+            srb = ctk.CTkTextbox(sf, height=60, width=400)
+            srb.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+            srb.insert("1.0", st['reply_message'])
+            
+            sub_widgets.append({
+                "id": st['id'],
+                "name_entry": sne,
+                "reply_box": srb
+            })
+            
+        def save_all():
+            mn = main_name_entry.get().strip()
+            mr = main_reply_box.get("1.0", "end-1c").strip()
+            if mn and mr:
+                update_topic(main_topic['id'], mn, mr)
+                
+            for sw in sub_widgets:
+                sn = sw["name_entry"].get().strip()
+                sr = sw["reply_box"].get("1.0", "end-1c").strip()
+                if sn and sr:
+                    update_topic(sw["id"], sn, sr)
+                    
+            messagebox.showinfo("Success", "All changes saved successfully!")
+            edit_win.destroy()
+            self._refresh()
+            
+        ctk.CTkButton(edit_win, text="Save All Changes", font=ctk.CTkFont(weight="bold"), height=40, fg_color=("#388E3C", "#2E7D32"), command=save_all).pack(pady=20)
 
 
 # ─────────────────────────────────────────────
@@ -247,6 +541,12 @@ class AdminFrame(ctk.CTkFrame):
         self.manual_btn = ctk.CTkButton(btn_frame, text="Add Manually", font=ctk.CTkFont(weight="bold"), fg_color=("#1976D2", "#0D47A1"), hover_color=("#1565C0", "#002171"), command=self._open_manual)
         self.manual_btn.pack(side="left", padx=10)
         
+        self.builder_btn = ctk.CTkButton(btn_frame, text="✨ AI Topic Builder", font=ctk.CTkFont(weight="bold"), fg_color=("#8E24AA", "#6A1B9A"), hover_color=("#7B1FA2", "#4A148C"), command=self._open_topic_builder)
+        self.builder_btn.pack(side="left", padx=10)
+        
+        self.manage_topics_btn = ctk.CTkButton(btn_frame, text="📋 Manage Topics", font=ctk.CTkFont(weight="bold"), fg_color=("#F57C00", "#E65100"), hover_color=("#EF6C00", "#BF360C"), command=self._open_manage_topics)
+        self.manage_topics_btn.pack(side="left", padx=10)
+        
         self.status_label = ctk.CTkLabel(self.upload_zone, text="", text_color="gray", font=ctk.CTkFont(size=12))
         self.status_label.pack()
 
@@ -284,6 +584,12 @@ class AdminFrame(ctk.CTkFrame):
         
     def _open_manual(self):
         ManualEntryWindow(self, self._refresh_entries)
+        
+    def _open_topic_builder(self):
+        TopicBuilderWindow(self)
+
+    def _open_manage_topics(self):
+        ManageTopicsWindow(self)
 
     def _upload_pdf(self):
         file_path = ctk.filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
@@ -525,17 +831,25 @@ class ChatFrame(ctk.CTkFrame):
         self.stop_btn.grid(row=0, column=2, padx=(10, 0))
         self.stop_generation_flag = False
 
-    def _populate_options(self):
+    def _populate_options(self, parent_id=None):
         for w in self.options_frame.winfo_children(): w.destroy()
         
-        options = ["How to Start a Chat", "Privacy & Data", "Managing Knowledge Base", "What models are supported?"]
-        
+        if parent_id is None:
+            topics = get_main_topics()
+        else:
+            topics = get_sub_topics(parent_id)
+            
+        if not topics:
+            self.options_frame.grid_remove()
+            return
+            
+        self.options_frame.grid()
         row_idx, col_idx, max_cols = 0, 0, 2
-        for opt in options:
-            btn = ctk.CTkButton(self.options_frame, text=opt, height=36, corner_radius=18,
+        for t in topics:
+            btn = ctk.CTkButton(self.options_frame, text=t["topic_name"], height=36, corner_radius=18,
                                 fg_color="transparent", border_width=1, border_color="#0097A7",
                                 text_color=("#0097A7", "#4DD0E1"), hover_color=("#E0F7FA", "#004D40"),
-                                command=lambda o=opt: self._send_option(o))
+                                command=lambda topic=t: self._handle_topic_click(topic))
             btn.grid(row=row_idx, column=col_idx, padx=5, pady=5, sticky="ew")
             self.options_frame.grid_columnconfigure(col_idx, weight=1)
             
@@ -544,10 +858,23 @@ class ChatFrame(ctk.CTkFrame):
                 col_idx = 0
                 row_idx += 1
 
-    def _send_option(self, text):
-        self.entry.delete(0, "end")
-        self.entry.insert(0, text)
-        self._send()
+    def _handle_topic_click(self, topic):
+        is_first_msg = (self.current_session_id is None)
+        if is_first_msg: self.current_session_id = str(uuid.uuid4())
+        
+        self._append_chat("You", topic["topic_name"])
+        self._append_chat("Bot", topic["reply_message"])
+        
+        # Save to chat history database
+        save_message(self.controller.username, self.current_session_id, topic["topic_name"], topic["reply_message"])
+        self.controller.after(0, lambda: self.sidebar.refresh_sessions())
+        
+        # Generate catchy title if first message
+        if is_first_msg:
+            threading.Thread(target=self._generate_catchy_title, args=(topic["topic_name"],), daemon=True).start()
+            
+        # Check for sub-topics
+        self._populate_options(parent_id=topic["id"])
 
     def start_new_chat(self):
         self.current_session_id = str(uuid.uuid4())
@@ -558,6 +885,7 @@ class ChatFrame(ctk.CTkFrame):
         self.chat_area.insert("end", "Hi, may I help you? You can choose an option below or type your question.\n\n")
         self.chat_area.see("end")
         self.chat_area.configure(state="disabled")
+        self._populate_options()
         self.options_frame.grid()
 
     def load_session(self, session_id):

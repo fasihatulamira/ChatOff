@@ -211,6 +211,105 @@ def build_system_prompt() -> str:
 
 
 # ─────────────────────────────────────────────
+#  Topics Builder API
+# ─────────────────────────────────────────────
+def save_topic(parent_id: int | None, topic_name: str, reply_message: str = "") -> int:
+    """
+    Save a new topic (or sub-topic) to chat_topics.
+    Returns the newly generated ID.
+    """
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO chat_topics (parent_id, topic_name, reply_message) VALUES (%s, %s, %s)",
+            (parent_id, topic_name.strip(), reply_message.strip())
+        )
+        conn.commit()
+        last_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        return last_id
+    except Error as e:
+        print(f"Error saving topic: {e}")
+        return -1
+
+def get_main_topics() -> list[dict]:
+    """Return all main topics (parent_id IS NULL)."""
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM chat_topics WHERE parent_id IS NULL ORDER BY created_at ASC")
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+    except Error:
+        return []
+
+def get_sub_topics(parent_id: int) -> list[dict]:
+    """Return sub-topics for a specific parent topic."""
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM chat_topics WHERE parent_id = %s ORDER BY created_at ASC", (parent_id,))
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+    except Error:
+        return []
+
+def get_all_topics() -> list[dict]:
+    """Return all topics for management."""
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor(dictionary=True)
+        # Fetch all topics, left join to get parent name if it exists
+        cursor.execute("""
+            SELECT t1.*, t2.topic_name as parent_name 
+            FROM chat_topics t1 
+            LEFT JOIN chat_topics t2 ON t1.parent_id = t2.id 
+            ORDER BY t1.parent_id ASC, t1.created_at ASC
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+    except Error:
+        return []
+
+def delete_topic(topic_id: int) -> bool:
+    """Delete a topic (and cascade its subtopics)."""
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM chat_topics WHERE id = %s", (topic_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True
+    except Error:
+        return False
+
+def update_topic(topic_id: int, topic_name: str, reply_message: str) -> bool:
+    """Update a topic's name and reply message."""
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE chat_topics SET topic_name = %s, reply_message = %s WHERE id = %s",
+            (topic_name.strip(), reply_message.strip(), topic_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True
+    except Error:
+        return False
+
+
+# ─────────────────────────────────────────────
 #  Chat History API
 # ─────────────────────────────────────────────
 def save_message(username: str, session_id: str, prompt_text: str, response_text: str) -> None:

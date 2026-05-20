@@ -12,7 +12,7 @@ from auth import (
     save_message, clear_history,
     get_user_sessions, load_session_messages,
     update_session_title, save_topic, get_main_topics, get_sub_topics,
-    get_all_topics, delete_topic, update_topic
+    get_all_topics, delete_topic, update_topic, get_topic_by_id
 )
 import os
 from rag import process_pdf, get_all_sources, delete_source, clear_rag, query_rag, add_manual_entry, get_source_content, save_unanswered_question
@@ -836,15 +836,32 @@ class ChatFrame(ctk.CTkFrame):
         
         if parent_id is None:
             topics = get_main_topics()
+            parent_topic = None
         else:
             topics = get_sub_topics(parent_id)
+            parent_topic = get_topic_by_id(parent_id)
             
-        if not topics:
+        if not topics and parent_id is None:
             self.options_frame.grid_remove()
             return
             
         self.options_frame.grid()
         row_idx, col_idx, max_cols = 0, 0, 2
+        
+        # Add 'Back' button if we are in a sub-topic menu
+        if parent_id is not None and parent_topic:
+            btn = ctk.CTkButton(self.options_frame, text="⬅ Back", height=36, corner_radius=18,
+                                fg_color="transparent", border_width=1, border_color="#D32F2F",
+                                text_color=("#D32F2F", "#EF5350"), hover_color=("#FFEBEE", "#421010"),
+                                command=lambda pid=parent_topic['parent_id']: self._populate_options(parent_id=pid))
+            btn.grid(row=row_idx, column=col_idx, padx=5, pady=5, sticky="ew")
+            self.options_frame.grid_columnconfigure(col_idx, weight=1)
+            
+            col_idx += 1
+            if col_idx >= max_cols:
+                col_idx = 0
+                row_idx += 1
+                
         for t in topics:
             btn = ctk.CTkButton(self.options_frame, text=t["topic_name"], height=36, corner_radius=18,
                                 fg_color="transparent", border_width=1, border_color="#0097A7",
@@ -857,6 +874,14 @@ class ChatFrame(ctk.CTkFrame):
             if col_idx >= max_cols:
                 col_idx = 0
                 row_idx += 1
+                
+        # Add 'Others' button
+        others_btn = ctk.CTkButton(self.options_frame, text="Others", height=36, corner_radius=18,
+                            fg_color="transparent", border_width=1, border_color="#9E9E9E",
+                            text_color=("#9E9E9E", "#BDBDBD"), hover_color=("#F5F5F5", "#424242"),
+                            command=self.options_frame.grid_remove)
+        others_btn.grid(row=row_idx, column=col_idx, padx=5, pady=5, sticky="ew")
+        self.options_frame.grid_columnconfigure(col_idx, weight=1)
 
     def _handle_topic_click(self, topic):
         is_first_msg = (self.current_session_id is None)

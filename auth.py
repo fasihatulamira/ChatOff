@@ -260,6 +260,19 @@ def get_sub_topics(parent_id: int) -> list[dict]:
     except Error:
         return []
 
+def get_topic_by_id(topic_id: int) -> dict:
+    """Return a single topic by its ID."""
+    try:
+        conn = _get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM chat_topics WHERE id = %s", (topic_id,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return row
+    except Error:
+        return None
+
 def get_all_topics() -> list[dict]:
     """Return all topics for management."""
     try:

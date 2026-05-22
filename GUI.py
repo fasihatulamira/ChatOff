@@ -330,18 +330,22 @@ class ManageTopicsWindow(ctk.CTkToplevel):
     def _open_edit_group(self, main_topic):
         edit_win = ctk.CTkToplevel(self)
         edit_win.title(f"Editing Topic Group: {main_topic['topic_name']}")
-        edit_win.geometry("700x650")
+        edit_win.geometry("700x700")
         edit_win.grab_set()
         
         try:
             x = self.winfo_x() + (self.winfo_width() // 2) - (700 // 2)
-            y = self.winfo_y() + (self.winfo_height() // 2) - (650 // 2)
+            y = self.winfo_y() + (self.winfo_height() // 2) - (700 // 2)
             edit_win.geometry(f"+{x}+{y}")
         except:
             pass
             
+        # Create responsive action button row at the bottom of the window
+        btn_panel = ctk.CTkFrame(edit_win, fg_color="transparent")
+        btn_panel.pack(fill="x", side="bottom", padx=20, pady=(10, 20))
+        
         scroll = ctk.CTkScrollableFrame(edit_win, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=20, pady=20)
+        scroll.pack(fill="both", expand=True, padx=20, pady=(20, 10))
         
         ctk.CTkLabel(scroll, text="Main Topic", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0,5))
         main_frame = ctk.CTkFrame(scroll, fg_color=("gray90", "gray10"))
@@ -359,46 +363,225 @@ class ManageTopicsWindow(ctk.CTkToplevel):
         
         ctk.CTkLabel(scroll, text="Sub-Topics", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0,5))
         
-        sub_topics = get_sub_topics(main_topic['id'])
-        sub_widgets = []
+        subtopics_container = ctk.CTkFrame(scroll, fg_color="transparent")
+        subtopics_container.pack(fill="x", pady=(0, 10))
         
-        for st in sub_topics:
-            sf = ctk.CTkFrame(scroll, fg_color=("gray90", "gray10"))
-            sf.pack(fill="x", pady=(0, 10))
+        sub_widgets = []
+        deleted_subtopic_ids = set()
+        
+        def animate_expand(frame, current_height=0, target_height=150, step=15):
+            if current_height < target_height:
+                new_height = current_height + step
+                if new_height > target_height:
+                    new_height = target_height
+                frame.configure(height=new_height)
+                edit_win.after(10, lambda: animate_expand(frame, new_height, target_height, step))
+            else:
+                frame.configure(height="")
+                frame.pack_propagate(True)
+
+        def animate_collapse(frame, current_height, step=15, on_complete=None):
+            if current_height > 0:
+                new_height = current_height - step
+                if new_height < 0:
+                    new_height = 0
+                frame.configure(height=new_height)
+                edit_win.after(10, lambda: animate_collapse(frame, new_height, step, on_complete))
+            else:
+                frame.pack_forget()
+                frame.destroy()
+                if on_complete:
+                    on_complete()
+                    
+        def update_reorder_buttons():
+            for idx, sw in enumerate(sub_widgets):
+                if idx == 0:
+                    sw["up_btn"].configure(state="disabled", text_color="gray50")
+                else:
+                    sw["up_btn"].configure(state="normal", text_color=("gray30", "#A1A1AA"))
+                if idx == len(sub_widgets) - 1:
+                    sw["down_btn"].configure(state="disabled", text_color="gray50")
+                else:
+                    sw["down_btn"].configure(state="normal", text_color=("gray30", "#A1A1AA"))
+
+        def move_card(card_data, direction):
+            idx = sub_widgets.index(card_data)
+            target_idx = idx + direction
+            if 0 <= target_idx < len(sub_widgets):
+                sub_widgets[idx], sub_widgets[target_idx] = sub_widgets[target_idx], sub_widgets[idx]
+                for sw in sub_widgets:
+                    sw["frame"].pack_forget()
+                for sw in sub_widgets:
+                    sw["frame"].pack(fill="x", pady=(0, 10))
+                update_reorder_buttons()
+
+        def remove_card(card_data):
+            if messagebox.askyesno("Delete Sub-Topic", "Are you sure you want to remove this sub-topic? This will not be saved until you click 'Save All Changes'."):
+                sf = card_data["frame"]
+                sf.update_idletasks()
+                current_h = sf.winfo_height()
+                sf.pack_propagate(False)
+                
+                def on_complete():
+                    sub_widgets.remove(card_data)
+                    if card_data["id"] is not None:
+                        deleted_subtopic_ids.add(card_data["id"])
+                    update_reorder_buttons()
+                    
+                animate_collapse(sf, current_h, step=max(1, current_h // 10), on_complete=on_complete)
+
+        def create_subtopic_card(st_id=None, name="", reply="", animate=False):
+            sf = ctk.CTkFrame(subtopics_container, fg_color=("gray90", "gray10"))
+            sf.columnconfigure(1, weight=1)
             
+            if animate:
+                sf.pack_propagate(False)
+                sf.configure(height=0)
+                sf.pack(fill="x", pady=(0, 10))
+            else:
+                sf.pack(fill="x", pady=(0, 10))
+                
             ctk.CTkLabel(sf, text="Name:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
             sne = ctk.CTkEntry(sf, width=200)
             sne.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-            sne.insert(0, st['topic_name'])
+            sne.insert(0, name)
+            
+            # Controls Frame (Reorder + Delete)
+            cf = ctk.CTkFrame(sf, fg_color="transparent")
+            cf.grid(row=0, column=2, padx=10, pady=10, sticky="e")
+            
+            up_btn = ctk.CTkButton(cf, text="▲", width=24, height=28, fg_color="transparent", hover_color=("gray85", "#27272A"), text_color=("gray30", "#A1A1AA"), font=ctk.CTkFont(size=12, weight="bold"))
+            down_btn = ctk.CTkButton(cf, text="▼", width=24, height=28, fg_color="transparent", hover_color=("gray85", "#27272A"), text_color=("gray30", "#A1A1AA"), font=ctk.CTkFont(size=12, weight="bold"))
+            del_btn = ctk.CTkButton(cf, text="🗑", width=28, height=28, corner_radius=14, fg_color="transparent", hover_color=("#FFEBEE", "#3C1F22"), text_color=("#D32F2F", "#EF5350"), font=ctk.CTkFont(size=13))
+            
+            up_btn.pack(side="left", padx=2)
+            down_btn.pack(side="left", padx=2)
+            del_btn.pack(side="left", padx=2)
             
             ctk.CTkLabel(sf, text="Reply:").grid(row=1, column=0, padx=10, pady=10, sticky="nw")
             srb = ctk.CTkTextbox(sf, height=60, width=400)
-            srb.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
-            srb.insert("1.0", st['reply_message'])
+            srb.grid(row=1, column=1, columnspan=2, padx=10, pady=10, sticky="ew")
+            srb.insert("1.0", reply)
             
-            sub_widgets.append({
-                "id": st['id'],
+            card_data = {
+                "id": st_id,
+                "frame": sf,
                 "name_entry": sne,
-                "reply_box": srb
-            })
+                "reply_box": srb,
+                "up_btn": up_btn,
+                "down_btn": down_btn,
+                "is_new": (st_id is None)
+            }
             
+            up_btn.configure(command=lambda: move_card(card_data, -1))
+            down_btn.configure(command=lambda: move_card(card_data, 1))
+            del_btn.configure(command=lambda: remove_card(card_data))
+            
+            sub_widgets.append(card_data)
+            update_reorder_buttons()
+            
+            if animate:
+                animate_expand(sf)
+
+        # Load existing sub-topics
+        sub_topics = get_sub_topics(main_topic['id'])
+        for st in sub_topics:
+            create_subtopic_card(st_id=st['id'], name=st['topic_name'], reply=st['reply_message'], animate=False)
+
+        def show_success_toast(callback):
+            toast = ctk.CTkFrame(edit_win, corner_radius=15, fg_color=("#388E3C", "#2E7D32"), border_width=1, border_color="#81C784")
+            toast.place(relx=0.5, rely=1.1, anchor="center")
+            
+            ctk.CTkLabel(toast, text="✨ Changes Saved Successfully!", font=ctk.CTkFont(weight="bold", size=13), text_color="white").pack(padx=25, pady=8)
+            
+            def slide_up(curr_rely=1.1):
+                if curr_rely > 0.85:
+                    next_rely = curr_rely - 0.025
+                    toast.place(relx=0.5, rely=next_rely, anchor="center")
+                    edit_win.after(10, lambda: slide_up(next_rely))
+                else:
+                    toast.place(relx=0.5, rely=0.85, anchor="center")
+                    edit_win.after(1200, slide_down)
+                    
+            def slide_down(curr_rely=0.85):
+                if curr_rely < 1.1:
+                    next_rely = curr_rely + 0.025
+                    toast.place(relx=0.5, rely=next_rely, anchor="center")
+                    edit_win.after(10, lambda: slide_down(next_rely))
+                else:
+                    toast.destroy()
+                    callback()
+                    
+            slide_up()
+
         def save_all():
             mn = main_name_entry.get().strip()
             mr = main_reply_box.get("1.0", "end-1c").strip()
-            if mn and mr:
-                update_topic(main_topic['id'], mn, mr)
+            
+            # Validation
+            if not mn:
+                messagebox.showwarning("Validation Error", "Main Topic Name cannot be empty!")
+                main_name_entry.focus()
+                return
+            if not mr:
+                messagebox.showwarning("Validation Error", "Main Topic Reply cannot be empty!")
+                main_reply_box.focus()
+                return
                 
+            for idx, sw in enumerate(sub_widgets):
+                sn = sw["name_entry"].get().strip()
+                sr = sw["reply_box"].get("1.0", "end-1c").strip()
+                if not sn:
+                    messagebox.showwarning("Validation Error", f"Sub-topic #{idx+1} Name cannot be empty!")
+                    sw["name_entry"].focus()
+                    return
+                if not sr:
+                    messagebox.showwarning("Validation Error", f"Sub-topic #{idx+1} Reply cannot be empty!")
+                    sw["reply_box"].focus()
+                    return
+            
+            # Save Main Topic
+            update_topic(main_topic['id'], mn, mr)
+            
+            # Delete Staged Sub-topics
+            for del_id in deleted_subtopic_ids:
+                delete_topic(del_id)
+                
+            # Save Active Sub-topics
             for sw in sub_widgets:
                 sn = sw["name_entry"].get().strip()
                 sr = sw["reply_box"].get("1.0", "end-1c").strip()
-                if sn and sr:
+                if sw["is_new"]:
+                    save_topic(parent_id=main_topic['id'], topic_name=sn, reply_message=sr)
+                else:
                     update_topic(sw["id"], sn, sr)
                     
-            messagebox.showinfo("Success", "All changes saved successfully!")
-            edit_win.destroy()
-            self._refresh()
+            def on_toast_complete():
+                edit_win.destroy()
+                self._refresh()
+                
+            show_success_toast(on_toast_complete)
             
-        ctk.CTkButton(edit_win, text="Save All Changes", font=ctk.CTkFont(weight="bold"), height=40, fg_color=("#388E3C", "#2E7D32"), command=save_all).pack(pady=20)
+        # Create action buttons inside responsive row panel
+        add_btn = ctk.CTkButton(btn_panel, text="➕ Add Sub-Topic", font=ctk.CTkFont(weight="bold"), 
+                               height=40, fg_color=("#8E24AA", "#6A1B9A"), hover_color=("#7B1FA2", "#4A148C"),
+                               command=lambda: create_subtopic_card(animate=True))
+                               
+        save_btn = ctk.CTkButton(btn_panel, text="Save All Changes", font=ctk.CTkFont(weight="bold"), 
+                                height=40, fg_color=("#388E3C", "#2E7D32"), command=save_all)
+                                
+        def on_resize(event):
+            width = event.width
+            add_btn.pack_forget()
+            save_btn.pack_forget()
+            if width < 450:
+                add_btn.pack(side="top", fill="x", pady=(0, 10))
+                save_btn.pack(side="top", fill="x")
+            else:
+                add_btn.pack(side="left", fill="x", expand=True, padx=(0, 10))
+                save_btn.pack(side="left", fill="x", expand=True, padx=(10, 0))
+                
+        btn_panel.bind("<Configure>", on_resize)
 
 
 # ─────────────────────────────────────────────
@@ -501,161 +684,845 @@ class AdminFrame(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent, fg_color="transparent")
         self.controller = controller
+        self._nav_buttons = {}
+        self._pages = {}
 
-        # Header (Logout & Appearance)
-        header = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
-        header.pack(fill="x", pady=(10, 0), padx=20)
-        
-        logout_btn = ctk.CTkButton(header, text="Logout", width=80, fg_color="#D32F2F", hover_color="#B71C1C", command=self.controller._logout)
-        logout_btn.pack(side="right", padx=(10, 0))
-        
-        self.appearance_menu = ctk.CTkOptionMenu(header, values=["Dark", "Light", "System"], command=ctk.set_appearance_mode, width=100)
-        self.appearance_menu.pack(side="right")
+        # ── Left Sidebar ───────────────────────────
+        self.admin_sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=("#0F0F12", "#09090B"))
+        self.admin_sidebar.pack(side="left", fill="y")
+        self.admin_sidebar.pack_propagate(False)
+
+        # Purple left accent strip
+        ctk.CTkFrame(self.admin_sidebar, width=4, corner_radius=0, fg_color="#8E24AA").pack(side="left", fill="y")
+
+        # Sidebar content frame
+        sidebar_content = ctk.CTkFrame(self.admin_sidebar, fg_color="transparent")
+        sidebar_content.pack(side="left", fill="both", expand=True, padx=15, pady=20)
+
+        # Branding
+        ctk.CTkLabel(sidebar_content, text="AI Command",
+                     font=ctk.CTkFont(size=24, weight="bold"), text_color="#B388FF").pack(anchor="w", pady=(10, 0))
+        ctk.CTkLabel(sidebar_content, text="Power User Console",
+                     font=ctk.CTkFont(size=12, weight="bold"), text_color="#FF8A65").pack(anchor="w", pady=(0, 30))
+
+        # Nav buttons
+        def _make_nav_btn(icon, label, key):
+            btn = ctk.CTkButton(
+                sidebar_content,
+                text=f"{icon}  {label}",
+                font=ctk.CTkFont(size=14, weight="normal"),
+                anchor="w", height=40, corner_radius=8,
+                fg_color="transparent", border_width=0,
+                text_color="#A1A1AA",
+                hover_color=("#1E1E28", "#1E1E28"),
+                command=lambda k=key: self._navigate(k)
+            )
+            btn.pack(fill="x", pady=6)
+            self._nav_buttons[key] = btn
+
+        _make_nav_btn("⚙️", "Manage",     "manage")
+        _make_nav_btn("✨", "AI Builder", "builder")
+        _make_nav_btn("🗂", "Topic",      "topic")
+        _make_nav_btn("📂", "Library",    "library")
+
+        # Bottom sidebar
+        bottom = ctk.CTkFrame(sidebar_content, fg_color="transparent")
+        bottom.pack(side="bottom", fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(bottom, text="Appearance:",
+                     font=ctk.CTkFont(size=11, weight="bold"), text_color="#71717A").pack(anchor="w", pady=(10, 2))
+        self.appearance_menu = ctk.CTkOptionMenu(
+            bottom, values=["Dark", "Light", "System"],
+            command=ctk.set_appearance_mode, height=36,
+            fg_color=("#374151", "#1E1E24"),
+            button_color=("#4B5563", "#27272A"),
+            button_hover_color=("#6B7280", "#3F3F46")
+        )
+        self.appearance_menu.pack(fill="x", pady=(0, 15))
         self.appearance_menu.set("Dark")
-        
-        # Title
-        title_frame = ctk.CTkFrame(self, fg_color="transparent")
-        title_frame.pack(fill="x", padx=40, pady=(10, 20))
-        ctk.CTkLabel(title_frame, text="Knowledge Base Management", font=ctk.CTkFont(size=28, weight="bold")).pack(anchor="w")
-        ctk.CTkLabel(title_frame, text="Upload and manage PDF documents to power the AI responses.", font=ctk.CTkFont(size=14), text_color="gray").pack(anchor="w")
 
-        # Upload Zone (Large dashed-like area)
-        self.upload_zone = ctk.CTkFrame(self, corner_radius=15, border_width=2, border_color=("gray70", "gray30"), fg_color=("gray90", "gray10"))
-        self.upload_zone.pack(fill="x", padx=60, pady=(10, 30), ipady=20)
-        
-        icon_label = ctk.CTkLabel(self.upload_zone, text="📄", font=ctk.CTkFont(size=40))
-        icon_label.pack(pady=(20, 5))
-        
-        main_text = ctk.CTkLabel(self.upload_zone, text="Click to browse and upload PDF", font=ctk.CTkFont(size=18, weight="bold"))
-        main_text.pack(pady=5)
-        
-        sub_text = ctk.CTkLabel(self.upload_zone, text="Maximum file size: 50MB", font=ctk.CTkFont(size=12), text_color="gray")
-        sub_text.pack(pady=(0, 10))
-        
-        btn_frame = ctk.CTkFrame(self.upload_zone, fg_color="transparent")
-        btn_frame.pack(pady=(10, 10))
-        
-        self.upload_btn = ctk.CTkButton(btn_frame, text="Browse PDF", font=ctk.CTkFont(weight="bold"), fg_color=("#0097A7", "#006064"), hover_color=("#00838F", "#004D40"), command=self._upload_pdf)
-        self.upload_btn.pack(side="left", padx=10)
-        
-        self.manual_btn = ctk.CTkButton(btn_frame, text="Add Manually", font=ctk.CTkFont(weight="bold"), fg_color=("#1976D2", "#0D47A1"), hover_color=("#1565C0", "#002171"), command=self._open_manual)
-        self.manual_btn.pack(side="left", padx=10)
-        
-        self.builder_btn = ctk.CTkButton(btn_frame, text="✨ AI Topic Builder", font=ctk.CTkFont(weight="bold"), fg_color=("#8E24AA", "#6A1B9A"), hover_color=("#7B1FA2", "#4A148C"), command=self._open_topic_builder)
-        self.builder_btn.pack(side="left", padx=10)
-        
-        self.manage_topics_btn = ctk.CTkButton(btn_frame, text="📋 Manage Topics", font=ctk.CTkFont(weight="bold"), fg_color=("#F57C00", "#E65100"), hover_color=("#EF6C00", "#BF360C"), command=self._open_manage_topics)
-        self.manage_topics_btn.pack(side="left", padx=10)
-        
-        self.status_label = ctk.CTkLabel(self.upload_zone, text="", text_color="gray", font=ctk.CTkFont(size=12))
-        self.status_label.pack()
+        ctk.CTkButton(
+            bottom, text="⇠  Logout", height=38,
+            font=ctk.CTkFont(weight="bold", size=13),
+            fg_color=("#D32F2F", "#B71C1C"), hover_color=("#FF1744", "#C62828"),
+            command=self.controller._logout
+        ).pack(fill="x", pady=(0, 10))
 
-        # Documents Table area
-        table_container = ctk.CTkFrame(self, corner_radius=15, fg_color=("gray95", "gray15"))
+        # ── Main content area ──────────────────────
+        self.main_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_container.pack(side="right", fill="both", expand=True)
+
+        # Build all pages
+        self._build_manage_page()
+        self._build_builder_page()
+        self._build_topic_page()
+        self._build_library_page()
+
+        # Default page
+        self._navigate("manage")
+
+    # ── Navigation ────────────────────────────────
+    def _navigate(self, page_key):
+        for page in self._pages.values():
+            page.pack_forget()
+        for key, btn in self._nav_buttons.items():
+            if key == page_key:
+                btn.configure(
+                    font=ctk.CTkFont(size=14, weight="bold"),
+                    text_color="white",
+                    border_width=1,
+                    border_color="#B388FF",
+                    fg_color="transparent"
+                )
+            else:
+                btn.configure(
+                    font=ctk.CTkFont(size=14, weight="normal"),
+                    text_color="#A1A1AA",
+                    border_width=0,
+                    border_color=None,
+                    fg_color="transparent"
+                )
+        self._pages[page_key].pack(fill="both", expand=True)
+        if page_key in ("manage", "library"):
+            self._refresh_entries()
+        elif page_key == "topic":
+            self._refresh_topics()
+
+    # ══════════════════════════════════════════════
+    #  PAGE: MANAGE – Knowledge Base Dashboard
+    # ══════════════════════════════════════════════
+    def _build_manage_page(self):
+        page = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self._pages["manage"] = page
+
+        # Header
+        hdr = ctk.CTkFrame(page, fg_color="transparent")
+        hdr.pack(fill="x", padx=40, pady=(25, 20))
+        ctr = ctk.CTkFrame(hdr, fg_color="transparent")
+        ctr.pack(anchor="center")
+
+        ctk.CTkLabel(ctr, text="Knowledge Base Management",
+                     font=ctk.CTkFont(size=30, weight="bold"), text_color="white",
+                     justify="center").pack(anchor="center")
+        ctk.CTkLabel(ctr, text="Upload and manage PDF documents to power the AI responses.",
+                     font=ctk.CTkFont(size=13), text_color="#A1A1AA",
+                     justify="center").pack(anchor="center", pady=(4, 15))
+
+        btn_row = ctk.CTkFrame(ctr, fg_color="transparent")
+        btn_row.pack(anchor="center", pady=(0, 5))
+
+        self.upload_btn = ctk.CTkButton(
+            btn_row, text="📤 Upload PDF",
+            font=ctk.CTkFont(weight="bold", size=13), height=38,
+            fg_color=("#1565C0", "#0D47A1"), hover_color=("#1976D2", "#1565C0"),
+            command=self._upload_pdf
+        )
+        self.upload_btn.pack(side="left", padx=8)
+
+        ctk.CTkButton(
+            btn_row, text="✏️ Manual Entry",
+            font=ctk.CTkFont(weight="bold", size=13), height=38,
+            fg_color=("#00796B", "#004D40"), hover_color=("#00897B", "#00695C"),
+            command=self._open_manual
+        ).pack(side="left", padx=8)
+
+        self.status_label = ctk.CTkLabel(page, text="", text_color="gray", font=ctk.CTkFont(size=12))
+
+        # Table
+        table_container = ctk.CTkFrame(page, corner_radius=15, fg_color=("gray95", "gray15"))
         table_container.pack(fill="both", expand=True, padx=40, pady=(0, 30))
-        
-        table_header_top = ctk.CTkFrame(table_container, fg_color="transparent")
-        table_header_top.pack(fill="x", padx=20, pady=(15, 10))
-        self.doc_count_label = ctk.CTkLabel(table_header_top, text="Uploaded Documents (0)", font=ctk.CTkFont(size=16, weight="bold"))
+
+        tbl_hdr = ctk.CTkFrame(table_container, fg_color="transparent")
+        tbl_hdr.pack(fill="x", padx=20, pady=(15, 10))
+
+        self.doc_count_label = ctk.CTkLabel(tbl_hdr, text="Uploaded Documents (0)",
+                                            font=ctk.CTkFont(size=18, weight="bold"), text_color="white")
         self.doc_count_label.pack(side="left")
-        ctk.CTkButton(table_header_top, text="Clear All", width=80, height=28, fg_color=("gray80", "gray30"), hover_color=("gray70", "gray20"), text_color=("black", "white"), command=self._clear_all).pack(side="right")
-        ctk.CTkButton(table_header_top, text="Unanswered Questions", width=140, height=28, fg_color=("#F57C00", "#E65100"), hover_color=("#EF6C00", "#BF360C"), command=self._open_unanswered).pack(side="right", padx=(0, 10))
-        
-        # Columns
-        col_frame = ctk.CTkFrame(table_container, fg_color=("gray85", "gray20"), corner_radius=8)
-        col_frame.pack(fill="x", padx=(10, 26), pady=(0, 10))
-        col_frame.grid_columnconfigure(0, weight=1)
-        col_frame.grid_columnconfigure(1, minsize=250, weight=0)
-        col_frame.grid_columnconfigure(2, minsize=200, weight=0)
-        col_frame.grid_columnconfigure(3, minsize=100, weight=0)
-        
-        ctk.CTkLabel(col_frame, text="FILE NAME", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=0, sticky="w", padx=15, pady=8)
-        ctk.CTkLabel(col_frame, text="SIZE", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=1, sticky="w", padx=10, pady=8)
-        ctk.CTkLabel(col_frame, text="UPLOAD DATE", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=2, sticky="w", padx=10, pady=8)
-        ctk.CTkLabel(col_frame, text="ACTIONS", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray").grid(row=0, column=3, sticky="e", padx=15, pady=8)
-        
+
+        ctk.CTkButton(
+            tbl_hdr, text="🗑 Clear All", width=90, height=32,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=("#374151", "#27272A"), hover_color=("#4B5563", "#3F3F46"),
+            text_color="#D1D5DB", command=self._clear_all
+        ).pack(side="right")
+
+        ctk.CTkButton(
+            tbl_hdr, text="⚠ Unanswered Questions", width=170, height=32,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=("#FFCCBC", "#FF8A65"), hover_color=("#FFAB91", "#FF7043"),
+            text_color="#1E1E1E", command=self._open_unanswered
+        ).pack(side="right", padx=(0, 10))
+
+        self.col_frame = ctk.CTkFrame(table_container, fg_color=("gray85", "gray20"), corner_radius=8)
+        self.col_frame.pack(fill="x", padx=(15, 37), pady=(0, 10))
+        self.col_frame.grid_columnconfigure(0, weight=1)
+        self.col_frame.grid_columnconfigure(1, minsize=200, weight=0)
+        self.col_frame.grid_columnconfigure(2, minsize=200, weight=0)
+        self.col_frame.grid_columnconfigure(3, minsize=120, weight=0)
+        ctk.CTkLabel(self.col_frame, text="🖧 FILE NAME", font=ctk.CTkFont(size=10, weight="bold"), text_color="#A1A1AA").grid(row=0, column=0, sticky="w", padx=15, pady=6)
+        ctk.CTkLabel(self.col_frame, text="SIZE",        font=ctk.CTkFont(size=10, weight="bold"), text_color="#A1A1AA").grid(row=0, column=1, sticky="w", padx=10, pady=6)
+        ctk.CTkLabel(self.col_frame, text="UPLOAD DATE", font=ctk.CTkFont(size=10, weight="bold"), text_color="#A1A1AA").grid(row=0, column=2, sticky="w", padx=10, pady=6)
+        ctk.CTkLabel(self.col_frame, text="ACTIONS",     font=ctk.CTkFont(size=10, weight="bold"), text_color="#A1A1AA").grid(row=0, column=3, sticky="e", padx=15, pady=6)
+
         self.entries_frame = ctk.CTkScrollableFrame(table_container, fg_color="transparent")
         self.entries_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self.entries_frame.bind("<Configure>", lambda event: self._align_header_action())
+
+    # ══════════════════════════════════════════════
+    #  PAGE: AI BUILDER – inline topic builder
+    # ══════════════════════════════════════════════
+    def _build_builder_page(self):
+        page = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self._pages["builder"] = page
+
+        ctk.CTkLabel(page, text="✨ AI Topic Profile Builder",
+                     font=ctk.CTkFont(size=30, weight="bold"), text_color="#E040FB"
+                     ).pack(pady=(30, 5), padx=40, anchor="w")
+        ctk.CTkLabel(page, text="Tell the AI what the topic is about, or load a PDF, and select the sub-topics to save.",
+                     font=ctk.CTkFont(size=13), text_color="#A1A1AA"
+                     ).pack(padx=40, anchor="w", pady=(0, 25))
+
+        mf = ctk.CTkFrame(page, fg_color="transparent")
+        mf.pack(fill="both", expand=True, padx=40, pady=(0, 30))
+
+        ctk.CTkLabel(mf, text="MAIN TOPIC NAME", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack(anchor="w", pady=(0, 5))
+        self.builder_topic_entry = ctk.CTkEntry(mf, placeholder_text="e.g., Food", height=40)
+        self.builder_topic_entry.pack(fill="x", pady=(0, 20))
+
+        ctx_hdr = ctk.CTkFrame(mf, fg_color="transparent")
+        ctx_hdr.pack(fill="x", pady=(0, 5))
+        ctk.CTkLabel(ctx_hdr, text="KNOWLEDGE CONTEXT (Paste text or load PDF)",
+                     font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack(side="left")
+        self.builder_browse_btn = ctk.CTkButton(
+            ctx_hdr, text="Browse PDF", width=100, height=28,
+            command=self._builder_load_pdf, fg_color=("#0097A7", "#006064")
+        )
+        self.builder_browse_btn.pack(side="right")
+
+        self.builder_content_box = ctk.CTkTextbox(mf, height=220, font=ctk.CTkFont(size=14))
+        self.builder_content_box.pack(fill="x", pady=(0, 20))
+        self.builder_content_box.insert("1.0", "e.g., The sub-topics should be Beverages, Main Course, and Desserts. Use this PDF text to base the answers on...")
+        self.builder_content_box.bind("<FocusIn>", self._builder_clear_placeholder)
+
+        self.builder_btn_frame = ctk.CTkFrame(mf, fg_color="transparent")
+        self.builder_btn_frame.pack(fill="x", pady=(10, 0))
+
+        self.builder_status_label = ctk.CTkLabel(self.builder_btn_frame, text="", text_color="gray")
+        self.builder_status_label.pack(side="left")
+
+        self.builder_generate_btn = ctk.CTkButton(
+            self.builder_btn_frame, text="✨ Auto-Generate",
+            height=42, width=160, font=ctk.CTkFont(weight="bold"),
+            fg_color=("#8E24AA", "#6A1B9A"), hover_color=("#7B1FA2", "#4A148C"),
+            command=self._builder_generate
+        )
+        self.builder_generate_btn.pack(side="right", padx=(10, 0))
+
+        ctk.CTkButton(
+            self.builder_btn_frame, text="🔄 Reset",
+            height=42, width=100, fg_color="transparent", border_width=1,
+            command=self._builder_reset
+        ).pack(side="right")
+
+        # Hidden checkbox container (shown after AI generates)
+        self.builder_checkbox_container = ctk.CTkFrame(mf, fg_color="transparent")
+        self.builder_checkbox_frame = None
+        self.builder_generated_subtopics = []
+        self.builder_checkbox_vars = []
+        self.builder_main_topic_name = ""
+
+    def _builder_load_pdf(self):
+        fp = ctk.filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
+        if not fp: return
+        try:
+            with open(fp, "rb") as f:
+                reader = PyPDF2.PdfReader(f)
+                text = "".join(p.extract_text() or "" for p in reader.pages)
+            self.builder_content_box.delete("1.0", "end")
+            self.builder_content_box.insert("end", text)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read PDF: {e}")
+
+    def _builder_clear_placeholder(self, event):
+        if "The sub-topics should be" in self.builder_content_box.get("1.0", "end-1c"):
+            self.builder_content_box.delete("1.0", "end")
+
+    def _builder_generate(self):
+        topic_name = self.builder_topic_entry.get().strip()
+        content = self.builder_content_box.get("1.0", "end-1c").strip()
+        if not topic_name or not content or "The sub-topics should be" in content:
+            self.builder_status_label.configure(text="Please fill in both fields.", text_color="#FF6B6B")
+            return
+        self.builder_status_label.configure(text="AI is analyzing and building...", text_color="#E040FB")
+        self.builder_generate_btn.configure(state="disabled")
+        self.update_idletasks()
+
+        def task():
+            prompt = (
+                f"You are an AI that structures conversation topics.\n"
+                f"The user is creating a main topic called '{topic_name}'.\n"
+                f"Based on the following content, extract the logical sub-topics.\n"
+                f"For each sub-topic, write a helpful reply message that the bot should say when the user clicks it.\n"
+                f"Respond ONLY with a valid JSON array like [{{\"topic_name\": \"...\", \"reply_message\": \"...\"}}]. No markdown.\n\n"
+                f"Content: {content}"
+            )
+            try:
+                gen = get_response(prompt, "llama3", system_prompt="You only output raw JSON arrays.")
+                ai_output = "".join(list(gen)).strip()
+                for strip in ("```json", "```"):
+                    if ai_output.startswith(strip): ai_output = ai_output[len(strip):]
+                if ai_output.endswith("```"): ai_output = ai_output[:-3]
+                subtopics = json.loads(ai_output)
+                if not isinstance(subtopics, list): raise ValueError("Not a list")
+                self.builder_generated_subtopics = subtopics
+                self.builder_main_topic_name = topic_name
+                self.after(0, self._builder_show_checkboxes)
+            except Exception as e:
+                self.after(0, lambda e=e: self._builder_on_fail(str(e)))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _builder_show_checkboxes(self):
+        self.builder_status_label.configure(text="Select the subtopics to save:", text_color="white")
+        self.builder_content_box.pack_forget()
+        self.builder_browse_btn.pack_forget()
+        if self.builder_checkbox_frame:
+            self.builder_checkbox_frame.destroy()
+        self.builder_checkbox_frame = ctk.CTkScrollableFrame(
+            self.builder_checkbox_container, height=200, fg_color=("gray95", "gray15")
+        )
+        self.builder_checkbox_frame.pack(fill="x", pady=(0, 20))
+        self.builder_checkbox_container.pack(fill="x", before=self.builder_btn_frame)
+        self.builder_checkbox_vars = []
+        for st in self.builder_generated_subtopics:
+            var = ctk.StringVar(value="on")
+            short = st.get('reply_message', '')[:60] + ("..." if len(st.get('reply_message', '')) > 60 else "")
+            ctk.CTkCheckBox(
+                self.builder_checkbox_frame,
+                text=f"✅ {st.get('topic_name')}  (Reply: {short})",
+                variable=var, onvalue="on", offvalue="off",
+                font=ctk.CTkFont(size=12)
+            ).pack(anchor="w", pady=8, padx=10)
+            self.builder_checkbox_vars.append((var, st))
+        self.builder_generate_btn.configure(text="Save Selected", state="normal", command=self._builder_final_save)
+
+    def _builder_final_save(self):
+        selected = [st for var, st in self.builder_checkbox_vars if var.get() == "on"]
+        if not selected:
+            self.builder_status_label.configure(text="No subtopics selected.", text_color="#FF6B6B")
+            return
+        pid = save_topic(None, self.builder_main_topic_name, f"You selected {self.builder_main_topic_name}. Please choose a sub-topic:")
+        if pid == -1:
+            self._builder_on_fail("Failed to save to database."); return
+        for st in selected:
+            save_topic(pid, st.get("topic_name", "Unknown"), st.get("reply_message", ""))
+        messagebox.showinfo("Success", "Topic and sub-topics created successfully!")
+        self._builder_reset()
+
+    def _builder_on_fail(self, msg):
+        self.builder_status_label.configure(text="AI generation failed. Try again.", text_color="#FF6B6B")
+        self.builder_generate_btn.configure(state="normal")
+        print(f"Topic Builder Error: {msg}")
+
+    def _builder_reset(self):
+        if self.builder_checkbox_frame:
+            self.builder_checkbox_frame.destroy()
+            self.builder_checkbox_frame = None
+        self.builder_checkbox_container.pack_forget()
+        self.builder_content_box.pack(fill="x", pady=(0, 20), before=self.builder_btn_frame)
+        self.builder_browse_btn.pack(side="right")
+        self.builder_topic_entry.delete(0, "end")
+        self.builder_content_box.delete("1.0", "end")
+        self.builder_content_box.insert("1.0", "e.g., The sub-topics should be Beverages, Main Course, and Desserts. Use this PDF text to base the answers on...")
+        self.builder_generate_btn.configure(text="✨ Auto-Generate", state="normal", command=self._builder_generate)
+        self.builder_status_label.configure(text="")
+
+    # ══════════════════════════════════════════════
+    #  PAGE: TOPIC – Manage Topics inline
+    # ══════════════════════════════════════════════
+    def _build_topic_page(self):
+        page = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self._pages["topic"] = page
+
+        hdr = ctk.CTkFrame(page, fg_color="transparent")
+        hdr.pack(fill="x", padx=40, pady=(25, 10))
+        ctk.CTkLabel(hdr, text="📋 Manage Topics",
+                     font=ctk.CTkFont(size=30, weight="bold"), text_color="#F57C00").pack(side="left")
+        ctk.CTkButton(
+            hdr, text="🔄 Refresh", width=90, height=36,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=("#374151", "#27272A"), hover_color=("#4B5563", "#3F3F46"),
+            text_color="#D1D5DB", command=self._refresh_topics
+        ).pack(side="right")
+
+        ctk.CTkLabel(page, text="View, edit and delete main topic groups and their sub-topics.",
+                     font=ctk.CTkFont(size=13), text_color="#A1A1AA").pack(padx=40, anchor="w", pady=(0, 20))
+
+        self.topic_scroll = ctk.CTkScrollableFrame(page, fg_color="transparent")
+        self.topic_scroll.pack(fill="both", expand=True, padx=40, pady=(0, 30))
+
+    def _refresh_topics(self):
+        for w in self.topic_scroll.winfo_children(): w.destroy()
+        topics = get_main_topics()
+        if not topics:
+            ctk.CTkLabel(self.topic_scroll, text="No topics found. Use AI Builder to create topics.",
+                         text_color="gray").pack(pady=40)
+            return
+        for t in topics:
+            row = ctk.CTkFrame(self.topic_scroll, corner_radius=10,
+                               fg_color=("gray85", "gray15"),
+                               border_width=1, border_color=("gray80", "#232329"))
+            row.pack(fill="x", pady=6)
+
+            info = ctk.CTkFrame(row, fg_color="transparent")
+            info.pack(side="left", fill="x", expand=True, padx=15, pady=12)
+
+            name_row = ctk.CTkFrame(info, fg_color="transparent")
+            name_row.pack(anchor="w")
+            ctk.CTkLabel(name_row, text="🗂", font=ctk.CTkFont(size=16)).pack(side="left", padx=(0, 8))
+            ctk.CTkLabel(name_row, text=t['topic_name'],
+                         font=ctk.CTkFont(size=15, weight="bold"), text_color="white").pack(side="left")
+
+            preview = t['reply_message'][:70] + ("..." if len(t['reply_message']) > 70 else "")
+            ctk.CTkLabel(info, text=f"Reply: {preview}",
+                         font=ctk.CTkFont(size=11), text_color="#71717A").pack(anchor="w", pady=(3, 0))
+
+            btns = ctk.CTkFrame(row, fg_color="transparent")
+            btns.pack(side="right", padx=12)
+
+            def edit_cmd(topic=t): self._open_edit_group(topic)
+            def del_cmd(tid=t['id'], nm=t['topic_name']):
+                if messagebox.askyesno("Delete", f"Delete '{nm}' and all its subtopics?"):
+                    delete_topic(tid); self._refresh_topics()
+
+            ctk.CTkButton(
+                btns, text="Edit Group", width=90, height=34,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color=("#1976D2", "#0D47A1"), hover_color=("#1565C0", "#0A3880"),
+                command=edit_cmd
+            ).pack(side="left", padx=(0, 8))
+
+            ctk.CTkButton(
+                btns, text="🗑 Delete", width=80, height=34,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="transparent", border_width=1, border_color="#D32F2F",
+                text_color=("#D32F2F", "#EF5350"), hover_color=("#FFEBEE", "#3C1F22"),
+                command=del_cmd
+            ).pack(side="left")
+
+    def _open_edit_group(self, main_topic):
+        """Opens the Edit Topic Group as a Toplevel popup."""
+        edit_win = ctk.CTkToplevel(self)
+        edit_win.title(f"Editing Topic Group: {main_topic['topic_name']}")
+        edit_win.geometry("700x700")
+        edit_win.grab_set()
+        try:
+            x = self.winfo_x() + (self.winfo_width() // 2) - 350
+            y = self.winfo_y() + (self.winfo_height() // 2) - 350
+            edit_win.geometry(f"+{x}+{y}")
+        except: pass
+
+        btn_panel = ctk.CTkFrame(edit_win, fg_color="transparent")
+        btn_panel.pack(fill="x", side="bottom", padx=20, pady=(10, 20))
+
+        scroll = ctk.CTkScrollableFrame(edit_win, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=20, pady=(20, 10))
+
+        ctk.CTkLabel(scroll, text="Main Topic", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0, 5))
+        mf = ctk.CTkFrame(scroll, fg_color=("gray90", "gray10"))
+        mf.pack(fill="x", pady=(0, 20))
+        mf.columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(mf, text="Name:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        main_name_entry = ctk.CTkEntry(mf, width=200)
+        main_name_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+        main_name_entry.insert(0, main_topic['topic_name'])
+
+        ctk.CTkLabel(mf, text="Reply:").grid(row=1, column=0, padx=10, pady=10, sticky="nw")
+        main_reply_box = ctk.CTkTextbox(mf, height=60, width=400)
+        main_reply_box.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+        main_reply_box.insert("1.0", main_topic['reply_message'])
+
+        ctk.CTkLabel(scroll, text="Sub-Topics", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0, 5))
+        subtopics_container = ctk.CTkFrame(scroll, fg_color="transparent")
+        subtopics_container.pack(fill="x", pady=(0, 10))
+
+        sub_widgets = []
+        deleted_subtopic_ids = set()
+
+        def animate_expand(frame, cur=0, target=150, step=15):
+            if cur < target:
+                nxt = min(cur + step, target)
+                frame.configure(height=nxt)
+                edit_win.after(10, lambda: animate_expand(frame, nxt, target, step))
+            else:
+                frame.configure(height="")
+                frame.pack_propagate(True)
+
+        def animate_collapse(frame, cur, step=15, on_complete=None):
+            if cur > 0:
+                nxt = max(cur - step, 0)
+                frame.configure(height=nxt)
+                edit_win.after(10, lambda: animate_collapse(frame, nxt, step, on_complete))
+            else:
+                frame.pack_forget(); frame.destroy()
+                if on_complete: on_complete()
+
+        def update_reorder_buttons():
+            for idx, sw in enumerate(sub_widgets):
+                sw["up_btn"].configure(
+                    state="disabled" if idx == 0 else "normal",
+                    text_color="gray50" if idx == 0 else ("gray30", "#A1A1AA")
+                )
+                sw["down_btn"].configure(
+                    state="disabled" if idx == len(sub_widgets) - 1 else "normal",
+                    text_color="gray50" if idx == len(sub_widgets) - 1 else ("gray30", "#A1A1AA")
+                )
+
+        def move_card(cd, direction):
+            idx = sub_widgets.index(cd)
+            ti = idx + direction
+            if 0 <= ti < len(sub_widgets):
+                sub_widgets[idx], sub_widgets[ti] = sub_widgets[ti], sub_widgets[idx]
+                for sw in sub_widgets: sw["frame"].pack_forget()
+                for sw in sub_widgets: sw["frame"].pack(fill="x", pady=(0, 10))
+                update_reorder_buttons()
+
+        def remove_card(cd):
+            if messagebox.askyesno("Delete Sub-Topic", "Remove this sub-topic? Changes apply on Save."):
+                sf = cd["frame"]
+                sf.update_idletasks(); h = sf.winfo_height()
+                sf.pack_propagate(False)
+                def done():
+                    sub_widgets.remove(cd)
+                    if cd["id"] is not None: deleted_subtopic_ids.add(cd["id"])
+                    update_reorder_buttons()
+                animate_collapse(sf, h, step=max(1, h // 10), on_complete=done)
+
+        def create_subtopic_card(st_id=None, name="", reply="", animate=False):
+            sf = ctk.CTkFrame(subtopics_container, fg_color=("gray90", "gray10"))
+            sf.columnconfigure(1, weight=1)
+            if animate:
+                sf.pack_propagate(False); sf.configure(height=0)
+                sf.pack(fill="x", pady=(0, 10))
+            else:
+                sf.pack(fill="x", pady=(0, 10))
+
+            ctk.CTkLabel(sf, text="Name:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+            sne = ctk.CTkEntry(sf, width=200)
+            sne.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+            sne.insert(0, name)
+
+            cf = ctk.CTkFrame(sf, fg_color="transparent")
+            cf.grid(row=0, column=2, padx=10, pady=10, sticky="e")
+            up_btn  = ctk.CTkButton(cf, text="▲", width=24, height=28, fg_color="transparent", hover_color=("gray85", "#27272A"), text_color=("gray30", "#A1A1AA"), font=ctk.CTkFont(size=12, weight="bold"))
+            down_btn= ctk.CTkButton(cf, text="▼", width=24, height=28, fg_color="transparent", hover_color=("gray85", "#27272A"), text_color=("gray30", "#A1A1AA"), font=ctk.CTkFont(size=12, weight="bold"))
+            del_btn = ctk.CTkButton(cf, text="🗑", width=28, height=28, corner_radius=14, fg_color="transparent", hover_color=("#FFEBEE", "#3C1F22"), text_color=("#D32F2F", "#EF5350"), font=ctk.CTkFont(size=13))
+            up_btn.pack(side="left", padx=2)
+            down_btn.pack(side="left", padx=2)
+            del_btn.pack(side="left", padx=2)
+
+            ctk.CTkLabel(sf, text="Reply:").grid(row=1, column=0, padx=10, pady=10, sticky="nw")
+            srb = ctk.CTkTextbox(sf, height=60, width=400)
+            srb.grid(row=1, column=1, columnspan=2, padx=10, pady=10, sticky="ew")
+            srb.insert("1.0", reply)
+
+            cd = {"id": st_id, "frame": sf, "name_entry": sne, "reply_box": srb,
+                  "up_btn": up_btn, "down_btn": down_btn, "is_new": (st_id is None)}
+            up_btn.configure(command=lambda: move_card(cd, -1))
+            down_btn.configure(command=lambda: move_card(cd, 1))
+            del_btn.configure(command=lambda: remove_card(cd))
+            sub_widgets.append(cd)
+            update_reorder_buttons()
+            if animate: animate_expand(sf)
+
+        for st in get_sub_topics(main_topic['id']):
+            create_subtopic_card(st_id=st['id'], name=st['topic_name'], reply=st['reply_message'])
+
+        def show_success_toast(callback):
+            toast = ctk.CTkFrame(edit_win, corner_radius=15,
+                                 fg_color=("#388E3C", "#2E7D32"),
+                                 border_width=1, border_color="#81C784")
+            toast.place(relx=0.5, rely=1.1, anchor="center")
+            ctk.CTkLabel(toast, text="✨ Changes Saved Successfully!",
+                         font=ctk.CTkFont(weight="bold", size=13), text_color="white").pack(padx=25, pady=8)
+            def slide_up(r=1.1):
+                if r > 0.85:
+                    toast.place(relx=0.5, rely=r - 0.025, anchor="center")
+                    edit_win.after(10, lambda: slide_up(r - 0.025))
+                else:
+                    edit_win.after(1200, slide_down)
+            def slide_down(r=0.85):
+                if r < 1.1:
+                    toast.place(relx=0.5, rely=r + 0.025, anchor="center")
+                    edit_win.after(10, lambda: slide_down(r + 0.025))
+                else:
+                    toast.destroy(); callback()
+            slide_up()
+
+        def save_all():
+            mn = main_name_entry.get().strip()
+            mr = main_reply_box.get("1.0", "end-1c").strip()
+            if not mn:
+                messagebox.showwarning("Validation", "Main Topic Name cannot be empty!"); main_name_entry.focus(); return
+            if not mr:
+                messagebox.showwarning("Validation", "Main Topic Reply cannot be empty!"); main_reply_box.focus(); return
+            for idx, sw in enumerate(sub_widgets):
+                sn = sw["name_entry"].get().strip()
+                sr = sw["reply_box"].get("1.0", "end-1c").strip()
+                if not sn:
+                    messagebox.showwarning("Validation", f"Sub-topic #{idx+1} Name cannot be empty!"); sw["name_entry"].focus(); return
+                if not sr:
+                    messagebox.showwarning("Validation", f"Sub-topic #{idx+1} Reply cannot be empty!"); sw["reply_box"].focus(); return
+            update_topic(main_topic['id'], mn, mr)
+            for did in deleted_subtopic_ids: delete_topic(did)
+            for sw in sub_widgets:
+                sn = sw["name_entry"].get().strip()
+                sr = sw["reply_box"].get("1.0", "end-1c").strip()
+                if sw["is_new"]: save_topic(parent_id=main_topic['id'], topic_name=sn, reply_message=sr)
+                else: update_topic(sw["id"], sn, sr)
+            def after_toast(): edit_win.destroy(); self._refresh_topics()
+            show_success_toast(after_toast)
+
+        add_btn  = ctk.CTkButton(btn_panel, text="➕ Add Sub-Topic", font=ctk.CTkFont(weight="bold"),
+                                 height=40, fg_color=("#8E24AA", "#6A1B9A"), hover_color=("#7B1FA2", "#4A148C"),
+                                 command=lambda: create_subtopic_card(animate=True))
+        save_btn = ctk.CTkButton(btn_panel, text="Save All Changes", font=ctk.CTkFont(weight="bold"),
+                                 height=40, fg_color=("#388E3C", "#2E7D32"), command=save_all)
+
+        def on_resize(event):
+            w = event.width
+            add_btn.pack_forget(); save_btn.pack_forget()
+            if w < 450:
+                add_btn.pack(side="top", fill="x", pady=(0, 10))
+                save_btn.pack(side="top", fill="x")
+            else:
+                add_btn.pack(side="left", fill="x", expand=True, padx=(0, 10))
+                save_btn.pack(side="left", fill="x", expand=True, padx=(10, 0))
+        btn_panel.bind("<Configure>", on_resize)
+
+    # ══════════════════════════════════════════════
+    #  PAGE: LIBRARY – Document list
+    # ══════════════════════════════════════════════
+    def _build_library_page(self):
+        page = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self._pages["library"] = page
+
+        hdr = ctk.CTkFrame(page, fg_color="transparent")
+        hdr.pack(fill="x", padx=40, pady=(25, 10))
+        ctk.CTkLabel(hdr, text="📂 Document Library",
+                     font=ctk.CTkFont(size=30, weight="bold"), text_color="white").pack(side="left")
+        ctk.CTkButton(
+            hdr, text="📤 Upload PDF",
+            font=ctk.CTkFont(weight="bold", size=13), height=38,
+            fg_color=("#1565C0", "#0D47A1"), hover_color=("#1976D2", "#1565C0"),
+            command=self._upload_pdf
+        ).pack(side="right", padx=(10, 0))
+        ctk.CTkButton(
+            hdr, text="✏️ Manual Entry",
+            font=ctk.CTkFont(weight="bold", size=13), height=38,
+            fg_color=("#00796B", "#004D40"), hover_color=("#00897B", "#00695C"),
+            command=self._open_manual
+        ).pack(side="right")
+
+        ctk.CTkLabel(page,
+                     text="All uploaded PDFs and manual knowledge entries stored in the AI knowledge base.",
+                     font=ctk.CTkFont(size=13), text_color="#A1A1AA").pack(padx=40, anchor="w", pady=(0, 20))
+
+        lib_tc = ctk.CTkFrame(page, corner_radius=15, fg_color=("gray95", "gray15"))
+        lib_tc.pack(fill="both", expand=True, padx=40, pady=(0, 30))
+
+        lib_hdr = ctk.CTkFrame(lib_tc, fg_color="transparent")
+        lib_hdr.pack(fill="x", padx=20, pady=(15, 10))
+        self.lib_doc_count_label = ctk.CTkLabel(lib_hdr, text="All Documents (0)",
+                                                font=ctk.CTkFont(size=18, weight="bold"), text_color="white")
+        self.lib_doc_count_label.pack(side="left")
+        ctk.CTkButton(
+            lib_hdr, text="🗑 Clear All", width=90, height=32,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=("#374151", "#27272A"), hover_color=("#4B5563", "#3F3F46"),
+            text_color="#D1D5DB", command=self._clear_all
+        ).pack(side="right")
+        ctk.CTkButton(
+            lib_hdr, text="⚠ Unanswered", width=130, height=32,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=("#FFCCBC", "#FF8A65"), hover_color=("#FFAB91", "#FF7043"),
+            text_color="#1E1E1E", command=self._open_unanswered
+        ).pack(side="right", padx=(0, 10))
+
+        self.lib_col_frame = ctk.CTkFrame(lib_tc, fg_color=("gray85", "gray20"), corner_radius=8)
+        self.lib_col_frame.pack(fill="x", padx=(15, 37), pady=(0, 10))
+        self.lib_col_frame.grid_columnconfigure(0, weight=1)
+        self.lib_col_frame.grid_columnconfigure(1, minsize=200, weight=0)
+        self.lib_col_frame.grid_columnconfigure(2, minsize=200, weight=0)
+        self.lib_col_frame.grid_columnconfigure(3, minsize=120, weight=0)
+        ctk.CTkLabel(self.lib_col_frame, text="🖧 FILE NAME", font=ctk.CTkFont(size=10, weight="bold"), text_color="#A1A1AA").grid(row=0, column=0, sticky="w", padx=15, pady=6)
+        ctk.CTkLabel(self.lib_col_frame, text="SIZE",        font=ctk.CTkFont(size=10, weight="bold"), text_color="#A1A1AA").grid(row=0, column=1, sticky="w", padx=10, pady=6)
+        ctk.CTkLabel(self.lib_col_frame, text="UPLOAD DATE", font=ctk.CTkFont(size=10, weight="bold"), text_color="#A1A1AA").grid(row=0, column=2, sticky="w", padx=10, pady=6)
+        ctk.CTkLabel(self.lib_col_frame, text="ACTIONS",     font=ctk.CTkFont(size=10, weight="bold"), text_color="#A1A1AA").grid(row=0, column=3, sticky="e", padx=15, pady=6)
+
+        self.lib_entries_frame = ctk.CTkScrollableFrame(lib_tc, fg_color="transparent")
+        self.lib_entries_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    def _populate_lib_rows(self, sources_info):
+        for w in self.lib_entries_frame.winfo_children(): w.destroy()
+        self.lib_doc_count_label.configure(text=f"All Documents ({len(sources_info)})")
+        if not sources_info:
+            ctk.CTkLabel(self.lib_entries_frame, text="No documents found.", text_color="gray").pack(pady=40)
+            return
+        for src, meta in sources_info:
+            row = ctk.CTkFrame(self.lib_entries_frame, corner_radius=10,
+                               border_width=1, border_color=("gray80", "#232329"),
+                               fg_color=("gray95", "#16161a"))
+            row.pack(fill="x", pady=6, padx=5)
+            row.grid_columnconfigure(0, weight=1)
+            row.grid_columnconfigure(1, minsize=200, weight=0)
+            row.grid_columnconfigure(2, minsize=200, weight=0)
+            row.grid_columnconfigure(3, minsize=120, weight=0)
+
+            nm_f = ctk.CTkFrame(row, fg_color="transparent")
+            nm_f.grid(row=0, column=0, sticky="w", padx=15, pady=10)
+            is_manual = src.startswith("Manual:")
+            if is_manual:
+                ic = ctk.CTkFrame(nm_f, width=36, height=36, corner_radius=8, fg_color=("#E0F2F1", "#102624"))
+                ic.pack_propagate(False); ic.pack(side="left", padx=(0, 12))
+                ctk.CTkLabel(ic, text="📝", font=ctk.CTkFont(size=16)).pack(expand=True)
+                badge = "MANUAL ENTRY"
+            else:
+                ic = ctk.CTkFrame(nm_f, width=36, height=36, corner_radius=8, fg_color=("#FFEBEE", "#2E1618"))
+                ic.pack_propagate(False); ic.pack(side="left", padx=(0, 12))
+                ctk.CTkLabel(ic, text="📄", font=ctk.CTkFont(size=16)).pack(expand=True)
+                badge = "OCR ACTIVE" if "complex" in src.lower() else "VECTOR OPTIMIZED"
+
+            tc = ctk.CTkFrame(nm_f, fg_color="transparent")
+            tc.pack(side="left", fill="both")
+            ctk.CTkLabel(tc, text=src, font=ctk.CTkFont(size=13, weight="bold"), text_color=("black", "white")).pack(anchor="w")
+            bf = ctk.CTkFrame(tc, corner_radius=4, fg_color=("gray90", "#212124"), border_width=1, border_color=("gray80", "#2D2D30"))
+            bf.pack(anchor="w", pady=(2, 0))
+            ctk.CTkLabel(bf, text=badge, font=ctk.CTkFont(size=8, weight="bold"), text_color=("#555555", "#A1A1AA")).pack(padx=6, pady=1)
+
+            ctk.CTkLabel(row, text="Manual Entry" if is_manual else meta.get("size", "Unknown"),
+                         font=ctk.CTkFont(size=12, weight="bold"), text_color=("gray30", "#A1A1AA")).grid(row=0, column=1, sticky="w", padx=10)
+            ctk.CTkLabel(row, text=meta.get("date", "Unknown"),
+                         font=ctk.CTkFont(size=12), text_color=("gray40", "#71717A")).grid(row=0, column=2, sticky="w", padx=10)
+
+            af = ctk.CTkFrame(row, fg_color="transparent")
+            af.grid(row=0, column=3, sticky="e", padx=15)
+            ctk.CTkButton(af, text="👁", width=32, height=32, corner_radius=16,
+                          fg_color="transparent", hover_color=("gray85", "#27272A"),
+                          text_color=("gray30", "#A1A1AA"), font=ctk.CTkFont(size=15),
+                          command=lambda s=src: self._view_single(s)).pack(side="left", padx=(0, 6))
+            ctk.CTkButton(af, text="🗑", width=32, height=32, corner_radius=16,
+                          fg_color="transparent", hover_color=("#FFEBEE", "#3C1F22"),
+                          text_color=("#D32F2F", "#EF5350"), font=ctk.CTkFont(size=15),
+                          command=lambda s=src: self._delete_single(s)).pack(side="left")
         
-        self._refresh_entries()
-        
+    # ── Shared utility methods ──────────────────
     def _open_unanswered(self):
         UnansweredQuestionsWindow(self, self.controller)
-        
+
     def _open_manual(self):
         ManualEntryWindow(self, self._refresh_entries)
-        
-    def _open_topic_builder(self):
-        TopicBuilderWindow(self)
-
-    def _open_manage_topics(self):
-        ManageTopicsWindow(self)
 
     def _upload_pdf(self):
         file_path = ctk.filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
         if not file_path: return
-        
-        self.upload_btn.configure(state="disabled")
-        self.status_label.configure(text=f"Reading & Embedding: {os.path.basename(file_path)}...")
-        
+        if hasattr(self, 'upload_btn') and self.upload_btn:
+            self.upload_btn.configure(state="disabled")
+        if hasattr(self, 'status_label'):
+            self.status_label.configure(text=f"Reading & Embedding: {os.path.basename(file_path)}...")
         def task():
-            def progress(current, total):
-                self.controller.after(0, lambda: self.status_label.configure(text=f"Embedding chunk {current}/{total}..."))
-                
-            ok, msg = process_pdf(file_path, progress_callback=progress)
+            ok, msg = process_pdf(file_path)
             self.controller.after(0, lambda: self._upload_complete(ok, msg))
-            
         threading.Thread(target=task, daemon=True).start()
-        
+
     def _upload_complete(self, ok, msg):
-        self.upload_btn.configure(state="normal")
-        color = "#4CAF50" if ok else "#FF6B6B"
-        self.status_label.configure(text=msg, text_color=color)
+        if hasattr(self, 'upload_btn') and self.upload_btn:
+            self.upload_btn.configure(state="normal")
+        if hasattr(self, 'status_label'):
+            self.status_label.configure(text=msg, text_color="#4CAF50" if ok else "#FF6B6B")
         if ok:
             self._refresh_entries()
 
     def _refresh_entries(self):
-        for w in self.entries_frame.winfo_children(): w.destroy()
+        """Refresh both the Manage page table and the Library page table."""
         sources_info = get_all_sources()
-        self.doc_count_label.configure(text=f"Uploaded Documents ({len(sources_info)})")
-        
+
+        # -- Manage page --
+        if hasattr(self, 'entries_frame'):
+            for w in self.entries_frame.winfo_children(): w.destroy()
+            self.doc_count_label.configure(text=f"Uploaded Documents ({len(sources_info)})")
+            if not sources_info:
+                ctk.CTkLabel(self.entries_frame, text="No documents found.", text_color="gray").pack(pady=40)
+            else:
+                for src, meta in sources_info:
+                    self._make_doc_row(self.entries_frame, src, meta, on_delete=self._delete_single)
+                self.after(50,  self._align_header_action)
+                self.after(150, self._align_header_action)
+
+        # -- Library page --
+        if hasattr(self, 'lib_entries_frame'):
+            self._populate_lib_rows(sources_info)
+
+    def _populate_lib_rows(self, sources_info):
+        for w in self.lib_entries_frame.winfo_children(): w.destroy()
+        self.lib_doc_count_label.configure(text=f"All Documents ({len(sources_info)})")
         if not sources_info:
-            ctk.CTkLabel(self.entries_frame, text="No documents found.", text_color="gray").pack(pady=40)
+            ctk.CTkLabel(self.lib_entries_frame, text="No documents found.", text_color="gray").pack(pady=40)
             return
-            
-        for i, (src, meta) in enumerate(sources_info):
-            bg_color = ("gray95", "gray15") if i % 2 == 0 else ("gray90", "gray12")
-            row = ctk.CTkFrame(self.entries_frame, corner_radius=0, fg_color=bg_color)
-            row.pack(fill="x")
-            
-            row.grid_columnconfigure(0, weight=1)
-            row.grid_columnconfigure(1, minsize=250, weight=0)
-            row.grid_columnconfigure(2, minsize=200, weight=0)
-            row.grid_columnconfigure(3, minsize=100, weight=0)
-            
-            # File name with icon
-            name_frame = ctk.CTkFrame(row, fg_color="transparent")
-            name_frame.grid(row=0, column=0, sticky="w", padx=15, pady=12)
-            ctk.CTkLabel(name_frame, text="📄", text_color="#EF5350").pack(side="left", padx=(0, 10))
-            ctk.CTkLabel(name_frame, text=src, font=ctk.CTkFont(size=13)).pack(side="left")
-            
-            # Size
-            ctk.CTkLabel(row, text=meta.get("size", "Unknown"), font=ctk.CTkFont(size=12), text_color="gray").grid(row=0, column=1, sticky="w", padx=10)
-            
-            # Date
-            ctk.CTkLabel(row, text=meta.get("date", "Unknown"), font=ctk.CTkFont(size=12), text_color="gray").grid(row=0, column=2, sticky="w", padx=10)
-            
-            # Actions
-            action_frame = ctk.CTkFrame(row, fg_color="transparent")
-            action_frame.grid(row=0, column=3, sticky="e", padx=15)
-            ctk.CTkButton(action_frame, text="👁", width=30, height=30, fg_color="transparent", hover_color=("gray80", "gray30"), text_color=("black", "white"), command=lambda s=src: self._view_single(s)).pack(side="left", padx=(0, 5))
-            ctk.CTkButton(action_frame, text="🗑", width=30, height=30, fg_color="transparent", hover_color=("gray80", "gray30"), text_color=("black", "white"), command=lambda s=src: self._delete_single(s)).pack(side="left")
+        for src, meta in sources_info:
+            self._make_doc_row(self.lib_entries_frame, src, meta, on_delete=self._delete_single)
+
+    def _make_doc_row(self, parent_frame, src, meta, on_delete):
+        row = ctk.CTkFrame(parent_frame, corner_radius=10,
+                           border_width=1, border_color=("gray80", "#232329"),
+                           fg_color=("gray95", "#16161a"))
+        row.pack(fill="x", pady=6, padx=5)
+        row.grid_columnconfigure(0, weight=1)
+        row.grid_columnconfigure(1, minsize=200, weight=0)
+        row.grid_columnconfigure(2, minsize=200, weight=0)
+        row.grid_columnconfigure(3, minsize=120, weight=0)
+
+        nm_f = ctk.CTkFrame(row, fg_color="transparent")
+        nm_f.grid(row=0, column=0, sticky="w", padx=15, pady=10)
+        is_manual = src.startswith("Manual:")
+        if is_manual:
+            ic = ctk.CTkFrame(nm_f, width=36, height=36, corner_radius=8, fg_color=("#E0F2F1", "#102624"))
+            ic.pack_propagate(False); ic.pack(side="left", padx=(0, 12))
+            ctk.CTkLabel(ic, text="📝", font=ctk.CTkFont(size=16)).pack(expand=True)
+            badge = "MANUAL ENTRY"
+        else:
+            ic = ctk.CTkFrame(nm_f, width=36, height=36, corner_radius=8, fg_color=("#FFEBEE", "#2E1618"))
+            ic.pack_propagate(False); ic.pack(side="left", padx=(0, 12))
+            ctk.CTkLabel(ic, text="📄", font=ctk.CTkFont(size=16)).pack(expand=True)
+            badge = "OCR ACTIVE" if "complex" in src.lower() else "VECTOR OPTIMIZED"
+
+        tc = ctk.CTkFrame(nm_f, fg_color="transparent")
+        tc.pack(side="left", fill="both")
+        ctk.CTkLabel(tc, text=src, font=ctk.CTkFont(size=13, weight="bold"), text_color=("black", "white")).pack(anchor="w")
+        bf = ctk.CTkFrame(tc, corner_radius=4, fg_color=("gray90", "#212124"), border_width=1, border_color=("gray80", "#2D2D30"))
+        bf.pack(anchor="w", pady=(2, 0))
+        ctk.CTkLabel(bf, text=badge, font=ctk.CTkFont(size=8, weight="bold"), text_color=("#555555", "#A1A1AA")).pack(padx=6, pady=1)
+
+        ctk.CTkLabel(row, text="Manual Entry" if is_manual else meta.get("size", "Unknown"),
+                     font=ctk.CTkFont(size=12, weight="bold"), text_color=("gray30", "#A1A1AA")).grid(row=0, column=1, sticky="w", padx=10)
+        ctk.CTkLabel(row, text=meta.get("date", "Unknown"),
+                     font=ctk.CTkFont(size=12), text_color=("gray40", "#71717A")).grid(row=0, column=2, sticky="w", padx=10)
+
+        af = ctk.CTkFrame(row, fg_color="transparent")
+        af.grid(row=0, column=3, sticky="e", padx=15)
+        ctk.CTkButton(af, text="👁", width=32, height=32, corner_radius=16,
+                      fg_color="transparent", hover_color=("gray85", "#27272A"),
+                      text_color=("gray30", "#A1A1AA"), font=ctk.CTkFont(size=15),
+                      command=lambda s=src: self._view_single(s)).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(af, text="🗑", width=32, height=32, corner_radius=16,
+                      fg_color="transparent", hover_color=("#FFEBEE", "#3C1F22"),
+                      text_color=("#D32F2F", "#EF5350"), font=ctk.CTkFont(size=15),
+                      command=lambda s=src: on_delete(s)).pack(side="left")
 
     def _view_single(self, src):
         content = get_source_content(src)
-        if not content:
-            content = "No content found for this entry."
-        ViewSourceWindow(self, src, content)
+        ViewSourceWindow(self, src, content or "No content found for this entry.")
 
     def _delete_single(self, src):
         if messagebox.askyesno("Delete", f"Are you sure you want to delete '{src}'?"):
@@ -663,9 +1530,30 @@ class AdminFrame(ctk.CTkFrame):
             self._refresh_entries()
 
     def _clear_all(self):
-        if messagebox.askyesno("Clear", "Delete ALL uploaded PDFs?"):
+        if messagebox.askyesno("Clear", "Delete ALL uploaded documents?"):
             clear_rag()
             self._refresh_entries()
+
+    def _align_header_action(self, event=None):
+        if not hasattr(self, 'entries_frame'): return
+        for child in self.entries_frame.winfo_children():
+            if isinstance(child, ctk.CTkFrame):
+                self._align_header(child); break
+
+    def _align_header(self, row):
+        row.update_idletasks()
+        row_width = row.winfo_width()
+        table_container = self.entries_frame.master
+        container_width = table_container.winfo_width()
+        if row_width > 1 and container_width > 1:
+            scale = self.col_frame._scaling_coefficient
+            right_pad_physical = container_width - (15 * scale) - row_width
+            right_pad_virtual = int(right_pad_physical / scale)
+            if 10 <= right_pad_virtual <= 100:
+                current_padx = self.col_frame.pack_info().get("padx", (15, 37))
+                current_right = int(current_padx[1] if isinstance(current_padx, (tuple, list)) else current_padx)
+                if current_right != right_pad_virtual:
+                    self.col_frame.pack_configure(padx=(15, right_pad_virtual))
 
 
 # ─────────────────────────────────────────────

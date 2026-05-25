@@ -171,16 +171,20 @@ def save_unanswered_db(db):
     with open(UNANSWERED_DB_PATH, "w", encoding="utf-8") as f:
         json.dump(db, f)
 
-def save_unanswered_question(question):
+def save_unanswered_question(question, username="Anonymous"):
     import uuid
     db = load_unanswered_db()
     # avoid duplicates
-    if any(q["question"].lower() == question.lower() for q in db):
+    if any(q["question"].lower().strip() == question.lower().strip() for q in db):
         return
     entry = {
         "id": str(uuid.uuid4()),
         "question": question,
-        "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "username": username,
+        "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "status": "unanswered",
+        "answer": None,
+        "question_emb": None
     }
     db.append(entry)
     save_unanswered_db(db)
@@ -192,4 +196,48 @@ def delete_unanswered_question(q_id):
     db = load_unanswered_db()
     db = [q for q in db if q["id"] != q_id]
     save_unanswered_db(db)
+
+def submit_admin_answer(q_id, answer):
+    db = load_unanswered_db()
+    for q in db:
+        if q["id"] == q_id:
+            q["status"] = "answered"
+            q["answer"] = answer
+            try:
+                q["question_emb"] = get_embedding(q["question"])
+            except Exception as e:
+                print(f"Failed to generate embedding for answered question: {e}")
+                q["question_emb"] = None
+            break
+    save_unanswered_db(db)
+
+def find_answered_question_match(prompt, threshold=0.85):
+    db = load_unanswered_db()
+    answered_qs = [q for q in db if q.get("status") == "answered"]
+    if not answered_qs:
+        return None
+        
+    # 1. Exact case-insensitive match
+    for q in answered_qs:
+        if q["question"].lower().strip() == prompt.lower().strip():
+            return q["answer"]
+            
+    # 2. Semantic similarity matching
+    try:
+        prompt_emb = get_embedding(prompt)
+        best_score = 0
+        best_answer = None
+        for q in answered_qs:
+            emb = q.get("question_emb")
+            if emb:
+                score = cosine_similarity(prompt_emb, emb)
+                if score > best_score:
+                    best_score = score
+                    best_answer = q["answer"]
+        if best_score >= threshold:
+            return best_answer
+    except Exception as e:
+        print(f"Error checking semantic similarity for Q&A: {e}")
+        
+    return None
 

@@ -1416,6 +1416,203 @@ class EmbeddedInsightsFrame(ctk.CTkFrame):
         ctk.CTkLabel(detail_frame, text=info_text, font=ctk.CTkFont(size=13), justify="left").pack(anchor="w", padx=30, pady=(0, 20))
 
 
+class EmbeddedEnvironmentFrame(ctk.CTkFrame):
+    def __init__(self, parent, controller, admin_frame):
+        super().__init__(parent, fg_color="transparent")
+        self.controller = controller
+        self.admin_frame = admin_frame
+        
+        title_label = ctk.CTkLabel(self, text="⚙️ Environment Configuration", font=ctk.CTkFont(size=24, weight="bold"), text_color="#29B6F6")
+        title_label.pack(pady=(20, 10), padx=20, anchor="w")
+        ctk.CTkLabel(self, text="Configure global app settings, Database credentials, and local LLM options stored in the .env file.", text_color="gray").pack(padx=20, anchor="w", pady=(0, 15))
+        
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.scroll.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        
+        # --- DATABASE SETTINGS CARD ---
+        db_card = ctk.CTkFrame(self.scroll, corner_radius=12, fg_color=("gray95", "gray12"), border_width=1, border_color=("gray85", "gray20"))
+        db_card.pack(fill="x", pady=10, padx=5)
+        
+        ctk.CTkLabel(db_card, text="🔌 MySQL Database Settings", font=ctk.CTkFont(size=15, weight="bold"), text_color="#29B6F6").pack(anchor="w", padx=20, pady=(15, 10))
+        
+        # DB Grid Frame
+        db_grid = ctk.CTkFrame(db_card, fg_color="transparent")
+        db_grid.pack(fill="x", padx=20, pady=(0, 15))
+        db_grid.grid_columnconfigure(1, weight=1)
+        
+        # Host
+        ctk.CTkLabel(db_grid, text="Database Host:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, sticky="w", pady=6, padx=(0, 10))
+        self.db_host_entry = ctk.CTkEntry(db_grid, placeholder_text="e.g. localhost", height=36)
+        self.db_host_entry.grid(row=0, column=1, sticky="ew", pady=6)
+        
+        # User
+        ctk.CTkLabel(db_grid, text="Database User:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=1, column=0, sticky="w", pady=6, padx=(0, 10))
+        self.db_user_entry = ctk.CTkEntry(db_grid, placeholder_text="e.g. root", height=36)
+        self.db_user_entry.grid(row=1, column=1, sticky="ew", pady=6)
+        
+        # Password
+        ctk.CTkLabel(db_grid, text="Database Password:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=2, column=0, sticky="w", pady=6, padx=(0, 10))
+        
+        pass_container = ctk.CTkFrame(db_grid, fg_color="transparent")
+        pass_container.grid(row=2, column=1, sticky="ew", pady=6)
+        pass_container.grid_columnconfigure(0, weight=1)
+        
+        self.db_pass_entry = ctk.CTkEntry(pass_container, placeholder_text="e.g. empty or password", height=36, show="•")
+        self.db_pass_entry.grid(row=0, column=0, sticky="ew")
+        
+        self.pass_visible = False
+        def toggle_pass():
+            if self.pass_visible:
+                self.db_pass_entry.configure(show="•")
+                toggle_btn.configure(text="👁")
+                self.pass_visible = False
+            else:
+                self.db_pass_entry.configure(show="")
+                toggle_btn.configure(text="🔒")
+                self.pass_visible = True
+                
+        toggle_btn = ctk.CTkButton(pass_container, text="👁", width=36, height=36, fg_color=("gray85", "gray20"), hover_color=("gray75", "gray30"), text_color=("gray20", "white"), command=toggle_pass)
+        toggle_btn.grid(row=0, column=1, padx=(6, 0))
+        
+        # Database Name
+        ctk.CTkLabel(db_grid, text="Database Name:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=3, column=0, sticky="w", pady=6, padx=(0, 10))
+        self.db_name_entry = ctk.CTkEntry(db_grid, placeholder_text="e.g. chatdb", height=36)
+        self.db_name_entry.grid(row=3, column=1, sticky="ew", pady=6)
+        
+        # --- OLLAMA AI SETTINGS CARD ---
+        llm_card = ctk.CTkFrame(self.scroll, corner_radius=12, fg_color=("gray95", "gray12"), border_width=1, border_color=("gray85", "gray20"))
+        llm_card.pack(fill="x", pady=10, padx=5)
+        
+        ctk.CTkLabel(llm_card, text="🧠 Ollama AI Engine Settings", font=ctk.CTkFont(size=15, weight="bold"), text_color="#AB47BC").pack(anchor="w", padx=20, pady=(15, 10))
+        
+        llm_grid = ctk.CTkFrame(llm_card, fg_color="transparent")
+        llm_grid.pack(fill="x", padx=20, pady=(0, 15))
+        llm_grid.grid_columnconfigure(1, weight=1)
+        
+        # Ollama Model Name
+        ctk.CTkLabel(llm_grid, text="Ollama Model Name:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, sticky="w", pady=6, padx=(0, 10))
+        self.llm_model_entry = ctk.CTkEntry(llm_grid, placeholder_text="e.g. llama3, mistral, gemma", height=36)
+        self.llm_model_entry.grid(row=0, column=1, sticky="ew", pady=6)
+        
+        # Ollama Base Host URL
+        ctk.CTkLabel(llm_grid, text="Ollama Host URL:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=1, column=0, sticky="w", pady=6, padx=(0, 10))
+        self.llm_host_entry = ctk.CTkEntry(llm_grid, placeholder_text="e.g. http://localhost:11434 (default)", height=36)
+        self.llm_host_entry.grid(row=1, column=1, sticky="ew", pady=6)
+        
+        # --- ACTIONS PANEL ---
+        actions_card = ctk.CTkFrame(self.scroll, fg_color="transparent")
+        actions_card.pack(fill="x", pady=15, padx=5)
+        
+        self.status_lbl = ctk.CTkLabel(actions_card, text="", font=ctk.CTkFont(size=12, weight="bold"))
+        self.status_lbl.pack(side="left")
+        
+        save_btn = ctk.CTkButton(actions_card, text="💾 Save Config", font=ctk.CTkFont(weight="bold"), height=40, width=140, fg_color=("#388E3C", "#2E7D32"), command=self._save_config)
+        save_btn.pack(side="right", padx=(10, 0))
+        
+        test_btn = ctk.CTkButton(actions_card, text="🔌 Test Connection", font=ctk.CTkFont(weight="bold"), height=40, width=140, fg_color=("#0288D1", "#01579B"), command=self._test_connection)
+        test_btn.pack(side="right")
+        
+        self._load_current_env()
+        
+    def _load_current_env(self):
+        from dotenv import load_dotenv
+        load_dotenv(override=True)
+        
+        self.db_host_entry.delete(0, "end")
+        self.db_host_entry.insert(0, os.getenv("DB_HOST", "localhost"))
+        
+        self.db_user_entry.delete(0, "end")
+        self.db_user_entry.insert(0, os.getenv("DB_USER", "root"))
+        
+        self.db_pass_entry.delete(0, "end")
+        self.db_pass_entry.insert(0, os.getenv("DB_PASSWORD", ""))
+        
+        self.db_name_entry.delete(0, "end")
+        self.db_name_entry.insert(0, os.getenv("DB_DATABASE", "chatdb"))
+        
+        self.llm_model_entry.delete(0, "end")
+        self.llm_model_entry.insert(0, os.getenv("OLLAMA_MODEL", "llama3"))
+        
+        self.llm_host_entry.delete(0, "end")
+        self.llm_host_entry.insert(0, os.getenv("OLLAMA_HOST", ""))
+        
+    def _test_connection(self):
+        host = self.db_host_entry.get().strip()
+        user = self.db_user_entry.get().strip()
+        password = self.db_pass_entry.get()
+        database = self.db_name_entry.get().strip()
+        
+        self.status_lbl.configure(text="Connecting to database...", text_color="gray")
+        self.update_idletasks()
+        
+        from auth import test_db_connection
+        
+        def task():
+            ok, msg = test_db_connection(host, user, password, database)
+            if ok:
+                self.after(0, lambda: self.status_lbl.configure(text="✓ Connection test successful!", text_color="#4CAF50"))
+            else:
+                self.after(0, lambda: self.status_lbl.configure(text=f"✗ Connection failed: {msg[:60]}", text_color="#FF6B6B"))
+                
+        threading.Thread(target=task, daemon=True).start()
+        
+    def _save_config(self):
+        host = self.db_host_entry.get().strip()
+        user = self.db_user_entry.get().strip()
+        password = self.db_pass_entry.get()
+        database = self.db_name_entry.get().strip()
+        model = self.llm_model_entry.get().strip()
+        ollama_host = self.llm_host_entry.get().strip()
+        
+        try:
+            env_content = f"""# MySQL Database Settings
+DB_HOST={host}
+DB_USER={user}
+DB_PASSWORD={password}
+DB_DATABASE={database}
+
+# Ollama Engine Settings
+OLLAMA_MODEL={model}
+OLLAMA_HOST={ollama_host}
+"""
+            with open(".env", "w", encoding="utf-8") as f:
+                f.write(env_content)
+                
+            from dotenv import load_dotenv
+            load_dotenv(override=True)
+            
+            self._show_success_toast()
+            self.status_lbl.configure(text="✓ Configuration saved and hot-reloaded!", text_color="#4CAF50")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save .env file: {e}")
+            
+    def _show_success_toast(self):
+        toast = ctk.CTkFrame(self, corner_radius=15, fg_color=("#388E3C", "#2E7D32"), border_width=1, border_color="#81C784")
+        toast.place(relx=0.5, rely=1.1, anchor="center")
+        
+        ctk.CTkLabel(toast, text="✨ Configuration Saved Successfully!", font=ctk.CTkFont(weight="bold", size=13), text_color="white").pack(padx=25, pady=8)
+        
+        def slide_up(curr_rely=1.1):
+            if curr_rely > 0.85:
+                next_rely = curr_rely - 0.025
+                toast.place(relx=0.5, rely=next_rely, anchor="center")
+                self.after(10, lambda: slide_up(next_rely))
+            else:
+                toast.place(relx=0.5, rely=0.85, anchor="center")
+                self.after(1200, slide_down)
+                
+        def slide_down(curr_rely=0.85):
+            if curr_rely < 1.1:
+                next_rely = curr_rely + 0.025
+                toast.place(relx=0.5, rely=next_rely, anchor="center")
+                self.after(10, lambda: slide_down(next_rely))
+            else:
+                toast.destroy()
+                
+        slide_up()
+
+
 # ─────────────────────────────────────────────
 #  ADMIN DASHBOARD FRAME
 # ─────────────────────────────────────────────
@@ -1494,12 +1691,16 @@ class AdminFrame(ctk.CTkFrame):
         btn_insights = create_menu_btn(sidebar_content, "📈", "Insights", is_active=False)
         btn_insights.pack(fill="x", pady=6)
 
+        btn_env = create_menu_btn(sidebar_content, "🛠", "Environment", is_active=False)
+        btn_env.pack(fill="x", pady=6)
+
         self.menu_buttons = {
             "Dashboard": btn_manage,
             "Topic Builder": btn_builder,
             "Manage Topic": btn_topic,
             "Library": btn_library,
-            "Insights": btn_insights
+            "Insights": btn_insights,
+            "Environment": btn_env
         }
 
         # Bottom sidebar container (for theme and logout)
@@ -1674,6 +1875,8 @@ class AdminFrame(ctk.CTkFrame):
             self.manage_topics_view.pack_forget()
         if hasattr(self, 'insights_view'):
             self.insights_view.pack_forget()
+        if hasattr(self, 'environment_view'):
+            self.environment_view.pack_forget()
             
         # Route to active view
         if name == "Dashboard":
@@ -1704,6 +1907,12 @@ class AdminFrame(ctk.CTkFrame):
                 self.insights_view = EmbeddedInsightsFrame(self.main_container, self.controller, self)
             self.insights_view.pack(fill="both", expand=True, padx=40, pady=30)
             self.insights_view._refresh()
+            
+        elif name == "Environment":
+            if not hasattr(self, 'environment_view'):
+                self.environment_view = EmbeddedEnvironmentFrame(self.main_container, self.controller, self)
+            self.environment_view.pack(fill="both", expand=True, padx=40, pady=30)
+            self.environment_view._load_current_env()
 
     def _open_unanswered(self):
         UnansweredQuestionsWindow(self, self.controller)

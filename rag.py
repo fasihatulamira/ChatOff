@@ -4,15 +4,16 @@ import math
 import ollama
 import PyPDF2
 import datetime
-import json
-import math
-import ollama
-import PyPDF2
+from dotenv import load_dotenv
+
+# Ensure dotenv is loaded
+load_dotenv()
 
 DB_PATH = "rag_db.json"
 
 def get_embedding(text):
-    res = ollama.embeddings(model="llama3", prompt=text)
+    model = os.getenv("OLLAMA_MODEL", "llama3")
+    res = ollama.embeddings(model=model, prompt=text)
     return res["embedding"]
 
 def cosine_similarity(a, b):

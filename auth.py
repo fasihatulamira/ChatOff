@@ -16,17 +16,32 @@ load_dotenv()
 # ─────────────────────────────────────────────
 #  Database connection settings
 # ─────────────────────────────────────────────
-DB_CONFIG = {
-    "host":     "localhost",
-    "user":     "root",
-    "password": os.getenv("DB_PASSWORD"),
-    "database": "chatdb",
-}
-
-
 def _get_connection():
     """Open and return a connection to the MySQL database."""
-    return mysql.connector.connect(**DB_CONFIG)
+    config = {
+        "host":     os.getenv("DB_HOST", "localhost"),
+        "user":     os.getenv("DB_USER", "root"),
+        "password": os.getenv("DB_PASSWORD", ""),
+        "database": os.getenv("DB_DATABASE", "chatdb"),
+    }
+    return mysql.connector.connect(**config)
+
+
+def test_db_connection(host, user, password, database) -> tuple[bool, str]:
+    """Test a database connection with the provided credentials."""
+    try:
+        conn = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database,
+            connection_timeout=5
+        )
+        conn.close()
+        return True, "Connection successful!"
+    except Error as e:
+        return False, str(e)
+
 
 
 

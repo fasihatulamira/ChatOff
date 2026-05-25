@@ -1,20 +1,24 @@
-# ===== CHATBOT LOGIC =====
-# Sends prompts to Ollama and streams the response.
-# Accepts an optional system_prompt to inject knowledge base context.
-
+import os
 import ollama
+from dotenv import load_dotenv
+
+# Ensure dotenv is loaded
+load_dotenv()
 
 
-def get_response(prompt: str, model: str = "llama3", system_prompt: str = ""):
+def get_response(prompt: str, model: str = None, system_prompt: str = ""):
     """
     Interact with Ollama and yield response text chunks (streaming).
 
     Parameters
     ----------
     prompt        : The user's message.
-    model         : Ollama model name (e.g. 'llama3', 'mistral').
+    model         : Ollama model name (e.g. 'llama3', 'mistral'). If None, resolves from OLLAMA_MODEL env var.
     system_prompt : Optional knowledge base context injected as a system message.
     """
+    if model is None:
+        model = os.getenv("OLLAMA_MODEL", "llama3")
+
     try:
         messages = []
 

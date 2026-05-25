@@ -451,36 +451,6 @@ def update_session_title(session_id: str, new_title: str) -> bool:
         return False
 
 
-def load_history(username: str, limit: int = 100) -> list[dict]:
-    """
-    Deprecated: Use load_session_messages. 
-    Remaining for backward compatibility if needed.
-    """
-    try:
-        user_id = _get_user_id(username)
-        if user_id is None:
-            return []
-
-        conn = _get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            """
-            SELECT prompt_text, response_text, created_at
-            FROM   chat_history
-            WHERE  user_id = %s
-            ORDER  BY created_at DESC
-            LIMIT  %s
-            """,
-            (user_id, limit)
-        )
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return list(reversed(rows))
-
-    except Error:
-        return []
-
 
 def clear_history(username: str) -> None:
     """Delete all chat history for the given user."""

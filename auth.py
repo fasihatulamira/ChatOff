@@ -228,7 +228,7 @@ def build_system_prompt() -> str:
 # ─────────────────────────────────────────────
 #  Topics Builder API
 # ─────────────────────────────────────────────
-def save_topic(parent_id: int | None, topic_name: str, reply_message: str = "") -> int:
+def save_topic(parent_id: int | None, topic_name: str, reply_message: str = "", pdf_source: str | None = None) -> int:
     """
     Save a new topic (or sub-topic) to chat_topics.
     Returns the newly generated ID.
@@ -237,8 +237,8 @@ def save_topic(parent_id: int | None, topic_name: str, reply_message: str = "") 
         conn = _get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO chat_topics (parent_id, topic_name, reply_message) VALUES (%s, %s, %s)",
-            (parent_id, topic_name.strip(), reply_message.strip())
+            "INSERT INTO chat_topics (parent_id, topic_name, reply_message, pdf_source) VALUES (%s, %s, %s, %s)",
+            (parent_id, topic_name.strip(), reply_message.strip(), pdf_source.strip() if pdf_source else None)
         )
         conn.commit()
         last_id = cursor.lastrowid
@@ -320,14 +320,14 @@ def delete_topic(topic_id: int) -> bool:
     except Error:
         return False
 
-def update_topic(topic_id: int, topic_name: str, reply_message: str) -> bool:
-    """Update a topic's name and reply message."""
+def update_topic(topic_id: int, topic_name: str, reply_message: str, pdf_source: str | None = None) -> bool:
+    """Update a topic's name, reply message, and pdf_source."""
     try:
         conn = _get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE chat_topics SET topic_name = %s, reply_message = %s WHERE id = %s",
-            (topic_name.strip(), reply_message.strip(), topic_id)
+            "UPDATE chat_topics SET topic_name = %s, reply_message = %s, pdf_source = %s WHERE id = %s",
+            (topic_name.strip(), reply_message.strip(), pdf_source.strip() if pdf_source else None, topic_id)
         )
         conn.commit()
         cursor.close()

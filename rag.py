@@ -49,8 +49,8 @@ def process_pdf(file_path, progress_callback=None):
     except Exception as e:
         return False, f"Failed to read PDF: {str(e)}"
         
-    chunk_size = 500
-    overlap = 100
+    chunk_size = 1500
+    overlap = 300
     
     source_name = os.path.basename(file_path)
     db = load_db()
@@ -108,7 +108,7 @@ def add_manual_entry(title, question, answer):
     save_db(db)
     return True, f"Successfully added manual entry: {title}"
 
-def query_rag(prompt, top_k=3, threshold=0.65):
+def query_rag(prompt, top_k=6, threshold=0.15, source_filter=None):
     db = load_db()
     if not db["chunks"]:
         return None
@@ -117,6 +117,9 @@ def query_rag(prompt, top_k=3, threshold=0.65):
     
     scores = []
     for i, emb in enumerate(db["embeddings"]):
+        # Option B: Support strict PDF filtering
+        if source_filter and db["sources"][i] != source_filter:
+            continue
         score = cosine_similarity(prompt_emb, emb)
         if score >= threshold:
             scores.append((score, db["chunks"][i]))

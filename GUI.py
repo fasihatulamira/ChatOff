@@ -6,6 +6,8 @@ import customtkinter as ctk
 import threading
 import uuid
 import re
+import json
+import PyPDF2
 from tkinter import messagebox
 from chatbot import get_response
 from auth import (
@@ -426,17 +428,26 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
             self.checkbox_frame = None
 
     def _load_pdf(self):
-        file_path = ctk.filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
+        file_path = ctk.filedialog.askopenfilename(parent=self, filetypes=[("PDF Files", "*.pdf")])
         if not file_path: return
         try:
             with open(file_path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
                 text = ""
-                for page in reader.pages:
+                num_pages = len(reader.pages)
+                
+                # Limit to 5 pages for Topic Builder to prevent LLM out-of-context errors
+                max_pages = min(5, num_pages)
+                for i in range(max_pages):
+                    page = reader.pages[i]
                     extracted = page.extract_text()
                     if extracted: text += extracted + "\n"
+                    
             self.content_box.delete("1.0", "end")
             self.content_box.insert("end", text)
+            
+            if num_pages > 5:
+                messagebox.showinfo("Note", f"The selected PDF has {num_pages} pages. To ensure optimal AI analysis and avoid processing timeouts, only the first 5 pages have been loaded.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to read PDF: {e}")
         
@@ -643,6 +654,19 @@ class EmbeddedManageTopicsFrame(ctk.CTkFrame):
         main_reply_box.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
         main_reply_box.insert("1.0", main_topic['reply_message'])
         
+        ctk.CTkLabel(main_frame, text="Strict PDF Lock:").grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        from rag import get_all_sources
+        all_pdfs = [src for src, meta in get_all_sources()]
+        pdf_options = ["None (Search All PDFs)"] + all_pdfs
+        pdf_menu = ctk.CTkOptionMenu(main_frame, values=pdf_options, width=250)
+        pdf_menu.grid(row=2, column=1, padx=10, pady=10, sticky="w")
+        
+        current_filter = main_topic.get("pdf_source")
+        if current_filter and current_filter in all_pdfs:
+            pdf_menu.set(current_filter)
+        else:
+            pdf_menu.set("None (Search All PDFs)")
+        
         ctk.CTkLabel(scroll, text="Sub-Topics", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0,5))
         
         subtopics_container = ctk.CTkFrame(scroll, fg_color="transparent")
@@ -823,7 +847,9 @@ class EmbeddedManageTopicsFrame(ctk.CTkFrame):
                     sw["reply_box"].focus()
                     return
             
-            update_topic(main_topic['id'], mn, mr)
+            selected_pdf = pdf_menu.get()
+            pdf_source_value = selected_pdf if selected_pdf != "None (Search All PDFs)" else None
+            update_topic(main_topic['id'], mn, mr, pdf_source=pdf_source_value)
             
             for del_id in deleted_subtopic_ids:
                 delete_topic(del_id)
@@ -1083,6 +1109,30 @@ class AdminFrame(ctk.CTkFrame):
         )
         self.unanswered_btn.pack(side="right", padx=(0, 10))
         
+        self.manual_btn = ctk.CTkButton(
+            table_header_top, 
+            text="➕ Add Manually", 
+            width=120, 
+            height=32, 
+            font=ctk.CTkFont(size=12, weight="bold"), 
+            fg_color=("#1976D2", "#0D47A1"), 
+            hover_color=("#1565C0", "#002171"), 
+            command=self._open_manual
+        )
+        self.manual_btn.pack(side="right", padx=(0, 10))
+        
+        self.upload_btn = ctk.CTkButton(
+            table_header_top, 
+            text="📥 Upload PDF", 
+            width=110, 
+            height=32, 
+            font=ctk.CTkFont(size=12, weight="bold"), 
+            fg_color=("#0097A7", "#006064"), 
+            hover_color=("#00838F", "#004D40"), 
+            command=self._upload_pdf
+        )
+        self.upload_btn.pack(side="right", padx=(0, 10))
+        
         self.col_frame = ctk.CTkFrame(table_container, fg_color=("gray85", "gray20"), corner_radius=8)
         self.col_frame.pack(fill="x", padx=(15, 37), pady=(0, 10))
         self.col_frame.grid_columnconfigure(0, weight=1)
@@ -1163,7 +1213,7 @@ class AdminFrame(ctk.CTkFrame):
         self.show_view("Manage Topic")
 
     def _upload_pdf(self):
-        file_path = ctk.filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
+        file_path = ctk.filedialog.askopenfilename(parent=self, filetypes=[("PDF Files", "*.pdf")])
         if not file_path: return
         
         if hasattr(self, 'upload_btn') and self.upload_btn:
@@ -1317,7 +1367,11 @@ class AdminFrame(ctk.CTkFrame):
         container_width = table_container.winfo_width()
         
         if row_width > 1 and container_width > 1:
-            scale = self.col_frame._scaling_coefficient
+            scale = 1.0
+            if hasattr(self.col_frame, "_get_widget_scaling"):
+                scale = self.col_frame._get_widget_scaling()
+            elif hasattr(self.col_frame, "_scaling_coefficient"):
+                scale = self.col_frame._scaling_coefficient
             # col_frame has left padding of 15 (virtual), which scales to 15 * scale physical pixels.
             # Calculate physical right padding: container_width - left_pad_physical - row_width
             right_pad_physical = container_width - (15 * scale) - row_width
@@ -1608,6 +1662,13 @@ class ChatFrame(ctk.CTkFrame):
         save_message(self.controller.username, self.current_session_id, topic["topic_name"], topic["reply_message"])
         self.controller.after(0, lambda: self.sidebar.refresh_sessions())
         
+        # Set active pdf_source filter for the current session (with parent inheritance)
+        self.active_source_filter = topic.get("pdf_source")
+        if not self.active_source_filter and topic.get("parent_id"):
+            parent_topic = get_topic_by_id(topic["parent_id"])
+            if parent_topic:
+                self.active_source_filter = parent_topic.get("pdf_source")
+        
         # Generate catchy title if first message
         if is_first_msg:
             threading.Thread(target=self._generate_catchy_title, args=(topic["topic_name"],), daemon=True).start()
@@ -1616,6 +1677,7 @@ class ChatFrame(ctk.CTkFrame):
         self._populate_options(parent_id=topic["id"])
 
     def start_new_chat(self):
+        self.active_source_filter = None
         self.current_session_id = str(uuid.uuid4())
         self.chat_area.configure(state="normal")
         self.chat_area.delete("1.0", "end")
@@ -1684,7 +1746,8 @@ class ChatFrame(ctk.CTkFrame):
                 threading.Thread(target=self._generate_catchy_title, args=(prompt,), daemon=True).start()
             return
 
-        sys = query_rag(prompt)
+        source_filter = getattr(self, "active_source_filter", None)
+        sys = query_rag(prompt, source_filter=source_filter)
         
         if sys is None:
             # Fallback logic

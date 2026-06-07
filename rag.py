@@ -13,7 +13,7 @@ load_dotenv()
 DB_PATH = "rag_db.json"
 
 def get_embedding(text):
-    model = os.getenv("OLLAMA_MODEL", "llama3")
+    model = os.getenv("OLLAMA_EMBED_MODEL", os.getenv("OLLAMA_MODEL", "llama3"))
     res = ollama.embeddings(model=model, prompt=text)
     return res["embedding"]
 
@@ -131,12 +131,17 @@ def add_manual_entry(title, question, answer):
     save_db(db)
     return True, f"Successfully added manual entry: {title}"
 
-def query_rag(prompt, top_k=6, threshold=0.15, source_filter=None):
+def query_rag(prompt, top_k=6, threshold=0.15, source_filter=None, prompt_emb_holder=None):
     db = load_db()
     if not db["chunks"]:
         return None
         
-    prompt_emb = get_embedding(prompt)
+    if prompt_emb_holder is not None and prompt_emb_holder[0] is not None:
+        prompt_emb = prompt_emb_holder[0]
+    else:
+        prompt_emb = get_embedding(prompt)
+        if prompt_emb_holder is not None:
+            prompt_emb_holder[0] = prompt_emb
     
     scores = []
     for i, emb in enumerate(db["embeddings"]):
@@ -238,7 +243,7 @@ def submit_admin_answer(q_id, answer):
             break
     save_unanswered_db(db)
 
-def find_answered_question_match(prompt, threshold=0.85):
+def find_answered_question_match(prompt, threshold=0.85, prompt_emb_holder=None):
     db = load_unanswered_db()
     answered_qs = [q for q in db if q.get("status") == "answered"]
     if not answered_qs:
@@ -251,7 +256,12 @@ def find_answered_question_match(prompt, threshold=0.85):
             
     # 2. Semantic similarity matching
     try:
-        prompt_emb = get_embedding(prompt)
+        if prompt_emb_holder is not None and prompt_emb_holder[0] is not None:
+            prompt_emb = prompt_emb_holder[0]
+        else:
+            prompt_emb = get_embedding(prompt)
+            if prompt_emb_holder is not None:
+                prompt_emb_holder[0] = prompt_emb
         best_score = 0
         best_answer = None
         for q in answered_qs:
@@ -265,6 +275,6 @@ def find_answered_question_match(prompt, threshold=0.85):
             return best_answer
     except Exception as e:
         print(f"Error checking semantic similarity for Q&A: {e}")
+        raise e
         
     return None
-

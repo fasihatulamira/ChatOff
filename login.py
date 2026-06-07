@@ -228,5 +228,11 @@ class LoginWindow(ctk.CTk):
         frame.pack(fill="both", expand=True)
 
     def _launch_chatbot(self):
-        """Destroy the login window and return to main coordinator."""
+        """Destroy the login window and open the main chatbot window."""
+        from GUI import OfflineChatbot
         self.destroy()
+        app = OfflineChatbot(
+            user_name=self.logged_in_user,
+            username=self.logged_in_username
+        )
+        app.mainloop()

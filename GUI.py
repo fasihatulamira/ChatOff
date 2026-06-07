@@ -1952,46 +1952,50 @@ class ChatFrame(ctk.CTkFrame):
 
     def _process_ai(self, prompt, is_first_msg):
         model = "llama3"
-        try:
-            prompt_emb_holder = [None]
-            # Check if there is a previously answered question matching this
-            from rag import find_answered_question_match
-            answered_match = find_answered_question_match(prompt, prompt_emb_holder=prompt_emb_holder)
-            if answered_match:
-                self.controller.after(0, lambda: (
-                    self.chat_area.configure(state="normal"),
-                    self.chat_area.insert("end", "Bot: ", "bold"),
-                    self.chat_area.insert("end", answered_match + "\n\n"),
-                    self.chat_area.see("end"),
-                    self.chat_area.configure(state="disabled")
-                ))
-                save_message(self.controller.username, self.current_session_id, prompt, answered_match)
-                self.controller.after(0, lambda: self.sidebar.refresh_sessions())
-                if is_first_msg:
-                    threading.Thread(target=self._generate_catchy_title, args=(prompt,), daemon=True).start()
-                return
+        
+        # Check if there is a previously answered question matching this
+        from rag import find_answered_question_match
+        answered_match = find_answered_question_match(prompt)
+        if answered_match:
+            self.controller.after(0, lambda: (
+                self.chat_area.configure(state="normal"),
+                self.chat_area.insert("end", "Bot: ", "bold"),
+                self.chat_area.insert("end", answered_match + "\n\n"),
+                self.chat_area.see("end"),
+                self.chat_area.configure(state="disabled"),
+                self.send_btn.configure(state="normal"),
+                self.stop_btn.configure(state="disabled")
+            ))
+            save_message(self.controller.username, self.current_session_id, prompt, answered_match)
+            self.controller.after(0, lambda: self.sidebar.refresh_sessions())
+            if is_first_msg:
+                threading.Thread(target=self._generate_catchy_title, args=(prompt,), daemon=True).start()
+            return
 
-            source_filter = getattr(self, "active_source_filter", None)
-            sys = query_rag(prompt, source_filter=source_filter, prompt_emb_holder=prompt_emb_holder)
+        source_filter = getattr(self, "active_source_filter", None)
+        sys = query_rag(prompt, source_filter=source_filter)
+        
+        if sys is None:
+            # Fallback logic
+            save_unanswered_question(prompt, self.controller.username)
+            fallback_msg = "Sorry, no answer found yet. We'll update this soon."
+            self.controller.after(0, lambda: (
+                self.chat_area.configure(state="normal"),
+                self.chat_area.insert("end", "Bot: ", "bold"),
+                self.chat_area.insert("end", fallback_msg + "\n\n"),
+                self.chat_area.see("end"),
+                self.chat_area.configure(state="disabled"),
+                self.send_btn.configure(state="normal"),
+                self.stop_btn.configure(state="disabled")
+            ))
+            save_message(self.controller.username, self.current_session_id, prompt, fallback_msg)
+            self.controller.after(0, lambda: self.sidebar.refresh_sessions())
+            if is_first_msg:
+                threading.Thread(target=self._generate_catchy_title, args=(prompt,), daemon=True).start()
+            return
             
-            if sys is None:
-                # Fallback logic
-                save_unanswered_question(prompt, self.controller.username)
-                fallback_msg = "Sorry, no answer found yet. We'll update this soon."
-                self.controller.after(0, lambda: (
-                    self.chat_area.configure(state="normal"),
-                    self.chat_area.insert("end", "Bot: ", "bold"),
-                    self.chat_area.insert("end", fallback_msg + "\n\n"),
-                    self.chat_area.see("end"),
-                    self.chat_area.configure(state="disabled")
-                ))
-                save_message(self.controller.username, self.current_session_id, prompt, fallback_msg)
-                self.controller.after(0, lambda: self.sidebar.refresh_sessions())
-                if is_first_msg:
-                    threading.Thread(target=self._generate_catchy_title, args=(prompt,), daemon=True).start()
-                return
-                
-            collected = []
+        collected = []
+        try:
             self.controller.after(0, lambda: (self.chat_area.configure(state="normal"), self.chat_area.insert("end", "Bot: ", "bold")))
             for chunk in get_response(prompt, model, sys):
                 if self.stop_generation_flag:
@@ -2009,8 +2013,7 @@ class ChatFrame(ctk.CTkFrame):
                 threading.Thread(target=self._generate_catchy_title, args=(prompt,), daemon=True).start()
 
         except Exception as e:
-            err_msg = str(e)
-            self.controller.after(0, lambda msg=err_msg: messagebox.showerror("Error", msg))
+            self.controller.after(0, lambda: messagebox.showerror("Error", str(e)))
         finally:
             self.controller.after(0, lambda: self.send_btn.configure(state="normal"))
             self.controller.after(0, lambda: self.stop_btn.configure(state="disabled"))
@@ -2051,7 +2054,6 @@ class OfflineChatbot(ctk.CTk):
         super().__init__()
         self.user_name, self.username = user_name, username or user_name.lower().replace(" ", "")
         self.title("ChatOff AI 🤖")
-        self.logged_out = False
 
         win_w, win_h = 1100, 800
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
@@ -2089,5 +2091,5 @@ class OfflineChatbot(ctk.CTk):
         frame.tkraise()
 
     def _logout(self):
-        self.logged_out = True
-        self.destroy()
+        from login import LoginWindow
+        self.destroy(); LoginWindow().mainloop()

@@ -131,13 +131,7 @@ def add_manual_entry(title, question, answer):
     save_db(db)
     return True, f"Successfully added manual entry: {title}"
 
-def query_rag(prompt, top_k=None, threshold=0.15, source_filter=None, prompt_emb_holder=None):
-    if top_k is None:
-        try:
-            top_k = int(os.getenv("RAG_TOP_K", "4"))
-        except:
-            top_k = 4
-
+def query_rag(prompt, top_k=6, threshold=0.15, source_filter=None, prompt_emb_holder=None):
     db = load_db()
     if not db["chunks"]:
         return None
@@ -167,14 +161,7 @@ def query_rag(prompt, top_k=None, threshold=0.15, source_filter=None, prompt_emb
     
     # Build a system prompt based on retrieved chunks
     context = "\n\n---\n\n".join(top_chunks)
-    system_prompt = (
-        f"You are a helpful AI assistant. Use the following extracted document context to provide a "
-        f"detailed, comprehensive, and complete answer to the user's question. Do not summarize too "
-        f"briefly; ensure you capture technical specifications, rules, details, and context. "
-        f"Please reply in the same language as the user's question (e.g., if the user asks in Malay, "
-        f"reply in Malay). If the answer is not in the context, do your best to answer it normally.\n\n"
-        f"### Document Context:\n{context}"
-    )
+    system_prompt = f"You are a helpful AI assistant. Use the following extracted document context to answer the user's question accurately. If the answer is not in the context, do your best to answer it normally.\n\n### Document Context:\n{context}"
     return system_prompt
 
 def get_source_content(source_name):

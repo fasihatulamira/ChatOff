@@ -649,8 +649,7 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
             )
             
             try:
-                model_name = os.getenv("OLLAMA_MODEL", "llama3")
-                gen = get_response(prompt, model_name, system_prompt="You only output raw JSON arrays.")
+                gen = get_response(prompt, "llama3", system_prompt="You only output raw JSON arrays.")
                 ai_output = "".join(list(gen)).strip()
                 
                 cleaned_output = ai_output
@@ -1813,7 +1812,6 @@ class ChatFrame(ctk.CTkFrame):
         self.stop_generation_flag = False
 
     def _populate_options(self, parent_id=None):
-        self.current_parent_id = parent_id
         self.in_others_state = False
         for w in self.options_frame.winfo_children(): w.destroy()
         
@@ -1939,7 +1937,7 @@ class ChatFrame(ctk.CTkFrame):
         if not msg: return
         
         if not getattr(self, "in_others_state", False):
-            self._show_others_state(parent_id=getattr(self, "current_parent_id", None))
+            self.options_frame.grid_remove()
         
         is_first_msg = (self.current_session_id is None)
         if is_first_msg: self.current_session_id = str(uuid.uuid4())
@@ -1953,7 +1951,7 @@ class ChatFrame(ctk.CTkFrame):
         threading.Thread(target=self._process_ai, args=(msg, is_first_msg), daemon=True).start()
 
     def _process_ai(self, prompt, is_first_msg):
-        model = os.getenv("OLLAMA_MODEL", "llama3")
+        model = "llama3"
         try:
             prompt_emb_holder = [None]
             # Check if there is a previously answered question matching this
@@ -2022,8 +2020,7 @@ class ChatFrame(ctk.CTkFrame):
         title_prompt = f"Summarize the following topic into a catchy 3-word title for a sidebar. Reply ONLY with the title: {prompt}"
         try:
             # We use a short request to get just the title
-            model_name = os.getenv("OLLAMA_MODEL", "llama3")
-            gen = get_response(title_prompt, model_name, system_prompt="You are a helpful assistant that provides short, catchy titles.")
+            gen = get_response(title_prompt, "llama3", system_prompt="You are a helpful assistant that provides short, catchy titles.")
             title = "".join(list(gen)).strip()
             # Clean up quotes if AI adds them
             title = re.sub(r'["\']', '', title)

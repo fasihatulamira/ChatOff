@@ -5,6 +5,7 @@ import ollama
 import PyPDF2
 import datetime
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Ensure dotenv is loaded
 load_dotenv()
@@ -49,7 +50,7 @@ def process_pdf(file_path, progress_callback=None):
     except Exception as e:
         return False, f"Failed to read PDF: {str(e)}"
         
-    chunk_size = 1500
+    chunk_size = 2500
     overlap = 300
     
     source_name = os.path.basename(file_path)
@@ -68,13 +69,35 @@ def process_pdf(file_path, progress_callback=None):
     if not chunks:
         return False, "No usable text found in PDF."
         
-    # Generate embeddings
+    # Generate embeddings concurrently using a thread pool
+    embeddings = [None] * len(chunks)
+    completed_count = 0
+    
+    def process_chunk(idx, chunk_text):
+        return idx, get_embedding(chunk_text)
+        
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(process_chunk, idx, chunk): idx for idx, chunk in enumerate(chunks)}
+        for future in as_completed(futures):
+            try:
+                idx, emb = future.result()
+                embeddings[idx] = emb
+                completed_count += 1
+                if progress_callback:
+                    if progress_callback(completed_count, len(chunks)) is False:
+                        for f in futures:
+                            f.cancel()
+                        return False, "Upload cancelled by user."
+            except Exception as e:
+                # Cancel remaining tasks on failure
+                for f in futures:
+                    f.cancel()
+                return False, f"Embedding generation failed: {str(e)}"
+                
+    # Save the generated chunks and embeddings in their correct order
     for idx, chunk in enumerate(chunks):
-        if progress_callback:
-            progress_callback(idx + 1, len(chunks))
-        emb = get_embedding(chunk)
         db["chunks"].append(chunk)
-        db["embeddings"].append(emb)
+        db["embeddings"].append(embeddings[idx])
         db["sources"].append(source_name)
         
     file_size_mb = round(os.path.getsize(file_path) / (1024 * 1024), 2)

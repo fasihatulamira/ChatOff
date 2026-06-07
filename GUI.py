@@ -23,6 +23,99 @@ from rag import process_pdf, get_all_sources, delete_source, clear_rag, query_ra
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
+# ─────────────────────────────────────────────
+#  PROCESSING & LOADING OVERLAY WINDOW
+# ─────────────────────────────────────────────
+class ProcessingWindow(ctk.CTkToplevel):
+    def __init__(self, parent, title="Processing", message="Please wait...", show_progress=False, on_cancel=None):
+        super().__init__(parent)
+        self.title(title)
+        self.geometry("420x190")
+        self.resizable(False, False)
+        self.on_cancel = on_cancel
+        self.is_cancelled = False
+        
+        # Keep window on top and grab focus (modal behavior)
+        self.transient(parent)
+        self.grab_set()
+        
+        # Center the window relative to parent
+        self.update_idletasks()
+        try:
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - (420 // 2)
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - (190 // 2)
+            self.geometry(f"+{x}+{y}")
+        except:
+            pass
+            
+        if on_cancel:
+            self.protocol("WM_DELETE_WINDOW", self.cancel)
+        else:
+            self.protocol("WM_DELETE_WINDOW", lambda: None) # Disable closing manually
+        
+        # Main Frame with slight padding
+        frame = ctk.CTkFrame(self, fg_color="transparent")
+        frame.pack(fill="both", expand=True, padx=25, pady=20)
+        
+        # Status Icon/Emoji
+        self.icon_lbl = ctk.CTkLabel(frame, text="⚙️", font=ctk.CTkFont(size=36))
+        self.icon_lbl.pack(pady=(5, 5))
+        
+        # Message Label
+        self.msg_lbl = ctk.CTkLabel(frame, text=message, font=ctk.CTkFont(size=14, weight="bold"))
+        self.msg_lbl.pack(pady=5)
+        
+        # Progress Bar
+        self.show_progress = show_progress
+        if show_progress:
+            self.progress_bar = ctk.CTkProgressBar(frame, width=320, height=8, progress_color=("#8E24AA", "#B388FF"))
+            self.progress_bar.pack(pady=(10, 5))
+            self.progress_bar.set(0.0)
+        else:
+            self.progress_bar = None
+            
+        # Detail / Subtext Label
+        self.detail_lbl = ctk.CTkLabel(frame, text="Working...", font=ctk.CTkFont(size=11), text_color="gray")
+        self.detail_lbl.pack(pady=(5, 0))
+        
+        # Subtle animation of dots
+        self.anim_dots = 0
+        self.animate_loader()
+        
+    def animate_loader(self):
+        if not self.winfo_exists():
+            return
+        self.anim_dots = (self.anim_dots + 1) % 4
+        dots = "." * self.anim_dots
+        if not self.show_progress:
+            self.detail_lbl.configure(text=f"Please wait{dots}")
+        self.after(500, self.animate_loader)
+        
+    def update_message(self, message):
+        self.msg_lbl.configure(text=message)
+        self.update()
+        
+    def update_progress(self, current, total):
+        if self.progress_bar:
+            val = current / total
+            self.progress_bar.set(val)
+            self.detail_lbl.configure(text=f"Progress: {current} of {total} chunks...")
+            self.update()
+            
+    def update_detail(self, text):
+        self.detail_lbl.configure(text=text)
+        self.update()
+        
+    def finish(self):
+        self.grab_release()
+        self.destroy()
+        
+    def cancel(self):
+        self.is_cancelled = True
+        if self.on_cancel:
+            self.on_cancel()
+        self.finish()
+
 
 # ─────────────────────────────────────────────
 #  MANUAL ENTRY WINDOW
@@ -94,7 +187,12 @@ class ManualEntryWindow(ctk.CTkToplevel):
             return
             
         self.status_label.configure(text="Generating Embeddings & Saving...", text_color="gray")
-        self.update_idletasks()
+        
+        self.processing_win = ProcessingWindow(
+            self, 
+            title="Saving Entry", 
+            message="Generating embeddings & saving..."
+        )
         
         def task():
             ok, msg = add_manual_entry(title, question, answer)
@@ -103,11 +201,17 @@ class ManualEntryWindow(ctk.CTkToplevel):
         threading.Thread(target=task, daemon=True).start()
         
     def _on_save_complete(self, ok, msg):
+        if hasattr(self, 'processing_win') and self.processing_win:
+            self.processing_win.finish()
+            self.processing_win = None
+            
         if ok:
             self.on_success_callback()
+            messagebox.showinfo("Success", "Knowledge entry saved successfully!")
             self.destroy()
         else:
             self.status_label.configure(text=msg, text_color="#FF6B6B")
+            messagebox.showerror("Error", msg)
 # ─────────────────────────────────────────────
 #  VIEW SOURCE WINDOW
 # ─────────────────────────────────────────────
@@ -186,9 +290,24 @@ class AnswerQuestionDialog(ctk.CTkToplevel):
             messagebox.showwarning("Validation Error", "Please provide a valid answer!")
             return
             
-        from rag import submit_admin_answer
-        submit_admin_answer(self.question_id, answer)
+        self.processing_win = ProcessingWindow(
+            self, 
+            title="Saving Answer", 
+            message="Generating embedding & learning..."
+        )
         
+        def task():
+            from rag import submit_admin_answer
+            submit_admin_answer(self.question_id, answer)
+            self.after(0, self._on_save_complete)
+            
+        threading.Thread(target=task, daemon=True).start()
+        
+    def _on_save_complete(self):
+        if hasattr(self, 'processing_win') and self.processing_win:
+            self.processing_win.finish()
+            self.processing_win = None
+            
         if self.on_save:
             self.on_save()
             
@@ -395,6 +514,17 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
         self.browse_btn = ctk.CTkButton(header_frame, text="Browse PDF", width=100, height=28, command=self._load_pdf, fg_color=("#0097A7", "#006064"))
         self.browse_btn.pack(side="right")
         
+        self.kb_dropdown = ctk.CTkOptionMenu(
+            header_frame,
+            values=["Select Uploaded PDF..."],
+            command=self._on_kb_select,
+            width=200,
+            height=28,
+            fg_color=("#1976D2", "#0D47A1"),
+            button_color=("#1565C0", "#002171")
+        )
+        self.kb_dropdown.pack(side="right", padx=(0, 10))
+        
         self.content_box = ctk.CTkTextbox(self.main_frame, height=200, font=ctk.CTkFont(size=14))
         self.content_box.pack(fill="x", pady=(0, 20))
         self.content_box.insert("1.0", "e.g., The sub-topics should be Beverages, Main Course, and Desserts. Use this PDF text to base the answers on...")
@@ -413,6 +543,7 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
         cancel_btn.pack(side="right")
         
         self.checkbox_frame = None
+        self._refresh_kb_dropdown()
 
     def _reset_view(self):
         self.topic_entry.delete(0, "end")
@@ -421,11 +552,13 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
         self.status_label.configure(text="", text_color="gray")
         self.publish_btn.configure(text="✨ Auto-Generate", state="normal", command=self._generate_subtopics)
         self.browse_btn.pack(side="right")
+        self.kb_dropdown.pack(side="right", padx=(0, 10))
         self.content_box.pack(fill="x", pady=(0, 20))
         if self.checkbox_frame:
             self.checkbox_frame.pack_forget()
             self.checkbox_frame.destroy()
             self.checkbox_frame = None
+        self._refresh_kb_dropdown()
 
     def _load_pdf(self):
         file_path = ctk.filedialog.askopenfilename(parent=self, filetypes=[("PDF Files", "*.pdf")])
@@ -435,21 +568,54 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
                 reader = PyPDF2.PdfReader(f)
                 text = ""
                 num_pages = len(reader.pages)
-                
-                # Limit to 5 pages for Topic Builder to prevent LLM out-of-context errors
-                max_pages = min(5, num_pages)
-                for i in range(max_pages):
-                    page = reader.pages[i]
+                for page in reader.pages:
                     extracted = page.extract_text()
                     if extracted: text += extracted + "\n"
                     
+            if not text.strip():
+                messagebox.showwarning("Warning", "No text could be extracted from this PDF. Please ensure the document contains selectable digital text (scanned PDF images are not supported).")
+                return
+                
             self.content_box.delete("1.0", "end")
             self.content_box.insert("end", text)
             
-            if num_pages > 5:
-                messagebox.showinfo("Note", f"The selected PDF has {num_pages} pages. To ensure optimal AI analysis and avoid processing timeouts, only the first 5 pages have been loaded.")
+            if num_pages > 10:
+                messagebox.showinfo("Note", f"Loaded all {num_pages} pages. For very large documents, please consider trimming the text in the box below before clicking 'Auto-Generate' to prevent the local LLM from exceeding its context window.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to read PDF: {e}")
+            
+    def _on_kb_select(self, choice):
+        if choice in ("Select Uploaded PDF...", "No Uploaded PDFs"):
+            return
+        
+        self.status_label.configure(text="Retrieving text from Knowledge Base...", text_color="gray")
+        self.update_idletasks()
+        
+        try:
+            text = get_source_content(choice)
+            if text:
+                self.content_box.delete("1.0", "end")
+                self.content_box.insert("end", text)
+                self.status_label.configure(text=f"Loaded content from {choice}", text_color="#4CAF50")
+            else:
+                self.status_label.configure(text="No content found in Knowledge Base.", text_color="#FF6B6B")
+        except Exception as e:
+            self.status_label.configure(text=f"Error loading: {str(e)}", text_color="#FF6B6B")
+            
+        self.kb_dropdown.set("Select Uploaded PDF...")
+        
+    def _refresh_kb_dropdown(self):
+        try:
+            sources = get_all_sources()
+            pdf_sources = [src for src, meta in sources if not src.startswith("Manual:")]
+            if pdf_sources:
+                values = ["Select Uploaded PDF..."] + sorted(pdf_sources)
+            else:
+                values = ["No Uploaded PDFs"]
+            self.kb_dropdown.configure(values=values)
+            self.kb_dropdown.set(values[0])
+        except Exception as e:
+            print(f"Error refreshing KB dropdown: {e}")
         
     def _clear_placeholder(self, event):
         if "The sub-topics should be" in self.content_box.get("1.0", "end-1c"):
@@ -465,7 +631,12 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
             
         self.status_label.configure(text="AI is analyzing and building...", text_color="#E040FB")
         self.publish_btn.configure(state="disabled")
-        self.update_idletasks()
+        
+        self.processing_win = ProcessingWindow(
+            self, 
+            title="AI Topic Builder", 
+            message="AI is analyzing content & building sub-topics..."
+        )
         
         def task():
             prompt = (
@@ -481,26 +652,47 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
                 gen = get_response(prompt, "llama3", system_prompt="You only output raw JSON arrays.")
                 ai_output = "".join(list(gen)).strip()
                 
-                if ai_output.startswith("```json"): ai_output = ai_output[7:]
-                if ai_output.startswith("```"): ai_output = ai_output[3:]
-                if ai_output.endswith("```"): ai_output = ai_output[:-3]
+                cleaned_output = ai_output
+                if cleaned_output.startswith("```json"): cleaned_output = cleaned_output[7:]
+                if cleaned_output.startswith("```"): cleaned_output = cleaned_output[3:]
+                if cleaned_output.endswith("```"): cleaned_output = cleaned_output[:-3]
+                cleaned_output = cleaned_output.strip()
+                
+                # Robust parsing with regex fallback
+                try:
+                    subtopics = json.loads(cleaned_output)
+                except json.JSONDecodeError:
+                    # Look for array pattern in case model returned conversational prefix/suffix
+                    match = re.search(r'\[\s*\{.*\}\s*\]', ai_output, re.DOTALL)
+                    if match:
+                        subtopics = json.loads(match.group(0))
+                    else:
+                        if not ai_output:
+                            raise ValueError("Ollama returned an empty response. Check if the Ollama service is running properly.")
+                        raise ValueError(f"AI response did not contain a valid JSON array.\nRaw Output: {ai_output[:250]}")
                     
-                subtopics = json.loads(ai_output)
                 if not isinstance(subtopics, list): raise ValueError("AI did not return a list.")
                 
                 self.generated_subtopics = subtopics
                 self.main_topic_name = topic_name
-                self.after(0, lambda: self._show_checkboxes())
+                self.after(0, self._on_success)
                 
             except Exception as e:
                 self.after(0, lambda e=e: self._on_fail(str(e)))
                 
         threading.Thread(target=task, daemon=True).start()
         
+    def _on_success(self):
+        if hasattr(self, 'processing_win') and self.processing_win:
+            self.processing_win.finish()
+            self.processing_win = None
+        self._show_checkboxes()
+        
     def _show_checkboxes(self):
         self.status_label.configure(text="Select the subtopics to save:", text_color=("gray20", "white"))
         self.content_box.pack_forget()
         self.browse_btn.pack_forget()
+        self.kb_dropdown.pack_forget()
         
         self.checkbox_frame = ctk.CTkScrollableFrame(self.main_frame, height=200, fg_color=("gray95", "gray15"))
         self.checkbox_frame.pack(fill="x", pady=(0, 20), before=self.btn_frame)
@@ -537,8 +729,12 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
         self.admin_frame.show_view("Manage Topic")
 
     def _on_fail(self, error_msg):
+        if hasattr(self, 'processing_win') and self.processing_win:
+            self.processing_win.finish()
+            self.processing_win = None
         self.status_label.configure(text="AI generation failed. Try again.", text_color="#FF6B6B")
         self.publish_btn.configure(state="normal")
+        messagebox.showerror("AI Error", f"Failed to auto-generate subtopics:\n{error_msg}")
         print(f"Topic Builder Error: {error_msg}")
 
 
@@ -1044,6 +1240,28 @@ class AdminFrame(ctk.CTkFrame):
         title_right = ctk.CTkFrame(title_center_container, fg_color="transparent")
         title_right.pack(anchor="center", pady=(0, 5))
         
+        self.upload_btn = ctk.CTkButton(
+            title_right, 
+            text="📥 Upload PDF", 
+            font=ctk.CTkFont(weight="bold", size=13), 
+            height=38, 
+            fg_color=("#0097A7", "#006064"), 
+            hover_color=("#00838F", "#004D40"), 
+            command=self._upload_pdf
+        )
+        self.upload_btn.pack(side="left", padx=8)
+        
+        self.manual_btn = ctk.CTkButton(
+            title_right, 
+            text="➕ Add Manually", 
+            font=ctk.CTkFont(weight="bold", size=13), 
+            height=38, 
+            fg_color=("#1976D2", "#0D47A1"), 
+            hover_color=("#1565C0", "#002171"), 
+            command=self._open_manual
+        )
+        self.manual_btn.pack(side="left", padx=8)
+        
         self.builder_btn = ctk.CTkButton(
             title_right, 
             text="✨ Topic Builder", 
@@ -1109,29 +1327,6 @@ class AdminFrame(ctk.CTkFrame):
         )
         self.unanswered_btn.pack(side="right", padx=(0, 10))
         
-        self.manual_btn = ctk.CTkButton(
-            table_header_top, 
-            text="➕ Add Manually", 
-            width=120, 
-            height=32, 
-            font=ctk.CTkFont(size=12, weight="bold"), 
-            fg_color=("#1976D2", "#0D47A1"), 
-            hover_color=("#1565C0", "#002171"), 
-            command=self._open_manual
-        )
-        self.manual_btn.pack(side="right", padx=(0, 10))
-        
-        self.upload_btn = ctk.CTkButton(
-            table_header_top, 
-            text="📥 Upload PDF", 
-            width=110, 
-            height=32, 
-            font=ctk.CTkFont(size=12, weight="bold"), 
-            fg_color=("#0097A7", "#006064"), 
-            hover_color=("#00838F", "#004D40"), 
-            command=self._upload_pdf
-        )
-        self.upload_btn.pack(side="right", padx=(0, 10))
         
         self.col_frame = ctk.CTkFrame(table_container, fg_color=("gray85", "gray20"), corner_radius=8)
         self.col_frame.pack(fill="x", padx=(15, 37), pady=(0, 10))
@@ -1218,24 +1413,55 @@ class AdminFrame(ctk.CTkFrame):
         
         if hasattr(self, 'upload_btn') and self.upload_btn:
             self.upload_btn.configure(state="disabled")
-        self.status_label.configure(text=f"Reading & Embedding: {os.path.basename(file_path)}...")
+        self.status_label.configure(text=f"Reading & Embedding: {os.path.basename(file_path)}...", text_color="gray")
+        
+        def on_cancel():
+            if hasattr(self, 'upload_btn') and self.upload_btn:
+                self.upload_btn.configure(state="normal")
+            self.status_label.configure(text="Upload cancelled by user.", text_color="orange")
+            self.processing_win = None
+            
+        self.processing_win = ProcessingWindow(
+            self, 
+            title="Uploading PDF", 
+            message=f"Processing {os.path.basename(file_path)}", 
+            show_progress=True,
+            on_cancel=on_cancel
+        )
         
         def task():
+            current_win = self.processing_win
             def progress(current, total):
-                self.controller.after(0, lambda: self.status_label.configure(text=f"Embedding chunk {current}/{total}..."))
+                if current_win is None or current_win.is_cancelled:
+                    return False
+                self.controller.after(0, lambda: current_win.update_progress(current, total) if (current_win and not current_win.is_cancelled) else None)
+                return True
                 
             ok, msg = process_pdf(file_path, progress_callback=progress)
+            
+            # If the user cancelled during processing, discard results immediately without running callbacks
+            if current_win is None or current_win.is_cancelled:
+                return
+                
             self.controller.after(0, lambda: self._upload_complete(ok, msg))
             
         threading.Thread(target=task, daemon=True).start()
         
     def _upload_complete(self, ok, msg):
+        if hasattr(self, 'processing_win') and self.processing_win:
+            self.processing_win.finish()
+            self.processing_win = None
+            
         if hasattr(self, 'upload_btn') and self.upload_btn:
             self.upload_btn.configure(state="normal")
-        color = "#4CAF50" if ok else "#FF6B6B"
-        self.status_label.configure(text=msg, text_color=color)
+            
         if ok:
+            self.status_label.configure(text=msg, text_color="#4CAF50")
             self._refresh_entries()
+            messagebox.showinfo("Success", "Document successfully processed into the Knowledge Base!")
+        else:
+            self.status_label.configure(text=msg, text_color="#FF6B6B")
+            messagebox.showerror("Error", msg)
 
     def _refresh_entries(self):
         for w in self.entries_frame.winfo_children(): w.destroy()

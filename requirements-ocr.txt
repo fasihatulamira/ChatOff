@@ -1,0 +1,9 @@
+"""Optional OCR dependencies for scanned PDF support.
+
+Install only if you need RAG_OCR_ENABLED=true:
+  pip install -r requirements-ocr.txt
+
+Also install Tesseract OCR on your system:
+  https://github.com/tesseract-ocr/tesseract
+"""
+pytesseract>=0.3.10

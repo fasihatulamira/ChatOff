@@ -1,0 +1,52 @@
+ChatOff AI v2.2 — Manual QA Checklist
+========================================
+Run automated checks first:  python release_check.py
+Then walk through each item below and mark [ ] -> [x] when done.
+
+── Login & Auth ──────────────────────────────────
+[ ] App starts: python app.py
+[ ] Login with wrong password shows error
+[ ] Login with valid user opens Home dashboard
+[ ] Sign-up creates a new account
+[ ] Admin login opens Admin Console (not user Home)
+[ ] Forced password change appears when must_change_password=1
+[ ] After password change, login works with new password
+
+── User Chat ─────────────────────────────────────
+[ ] Home -> Chat & Help opens chat screen
+[ ] Send a message; bot reply streams in word-by-word
+[ ] Stop button cancels generation mid-reply
+[ ] New chat creates a sidebar session
+[ ] Clicking old session loads history
+[ ] Logout returns to login screen
+
+── RAG / Knowledge Base ──────────────────────────
+[ ] Admin -> Library shows uploaded PDFs
+[ ] Upload a new PDF; progress bar completes
+[ ] User asks a question matching PDF content
+[ ] Answer includes "Sources:" footer with PDF name + score
+[ ] Weak/unrelated question falls back to general AI (no sources)
+[ ] View Source shows PDF chunk content
+
+── Admin Console ─────────────────────────────────
+[ ] Dashboard loads stats / unanswered questions
+[ ] Topic Builder generates topics from PDF text
+[ ] Manage Topic: create, edit, delete topic
+[ ] Preview User Chat opens user Home from admin sidebar
+[ ] Back to Admin Console returns to admin panel
+[ ] Clear All / delete source works without crash
+
+── Performance (Phase 5) ─────────────────────────
+[ ] First reply appears within ~1 minute (RAG question)
+[ ] Ollama tray icon shows model loaded after first chat
+[ ] python benchmark_ollama.py — chat_with_rag ttft under 90s
+
+── Installer (optional, after build.ps1) ─────────
+[ ] ChatOff_Setup.exe installs without errors
+[ ] Installed app launches from desktop shortcut
+[ ] .env created from .env.example on first install
+[ ] Ollama models download during setup
+
+Notes / issues found:
+_________________________________________________
+_________________________________________________

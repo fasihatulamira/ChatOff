@@ -1,16 +1,31 @@
-# Python temporary files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+.eggs/
 
-# Environment variables (Crucial for security!)
+# Secrets
 .env
 
 # Virtual environments
 venv/
 env/
+.venv/
 
-# Build and Dist folders (PyInstaller creates these)
+# Build artifacts (PyInstaller / Inno Setup)
 build/
 dist/
 *.spec
+Installer/*.exe
+
+# Local knowledge-base data (machine-specific)
+rag_db.json
+rag_db.json.tmp
+unanswered_db.json
+unanswered_db.json.tmp
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp

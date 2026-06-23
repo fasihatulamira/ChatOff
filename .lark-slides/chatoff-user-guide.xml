@@ -1,0 +1,267 @@
+<title>ChatOff AI — User Guide</title>
+
+<callout emoji="bulb" background-color="light-blue" border-color="blue" text-color="blue">
+<p><b>ChatOff AI v2.2</b> is an offline AI assistant that answers questions using documents you upload. Everything runs on your PC — chat, PDF knowledge base, and AI models stay local.</p>
+</callout>
+
+<h1>1. Before You Start</h1>
+
+<p>Make sure these services are running on your computer before opening ChatOff:</p>
+
+<table>
+<thead>
+<tr><th>Requirement</th><th>What to check</th></tr>
+</thead>
+<tbody>
+<tr><td><b>MySQL database</b></td><td>Database <code>chatdb</code> is created and <code>schema.sql</code> has been imported</td></tr>
+<tr><td><b>Ollama</b></td><td>Ollama is running in the system tray; models <code>llama3.2:3b</code> and <code>nomic-embed-text</code> are downloaded</td></tr>
+<tr><td><b>Configuration</b></td><td>File <code>.env</code> exists (copy from <code>.env.example</code>) with the correct database password</td></tr>
+</tbody>
+</table>
+
+<p><b>First-time install (Windows):</b> run <code>ChatOff_Setup.exe</code> or <code>setup.ps1</code>, then launch the app from the desktop shortcut or by running <code>python app.py</code>.</p>
+
+<hr/>
+
+<h1>2. Launch the Application</h1>
+
+<ol>
+<li seq="auto">Open <b>ChatOff</b> from the desktop shortcut, Start menu, or run <code>python app.py</code> from the project folder.</li>
+<li seq="auto">Wait for the <b>Login</b> window to appear.</li>
+<li seq="auto">If you see a database error, check MySQL is running and your <code>.env</code> settings are correct.</li>
+</ol>
+
+<hr/>
+
+<h1>3. Create an Account (New Users)</h1>
+
+<ol>
+<li seq="auto">On the Login screen, click <b>Don't have an account? Sign Up</b>.</li>
+<li seq="auto">Fill in <b>Full Name</b>, <b>Username</b>, <b>Email Address</b>, <b>Password</b>, and <b>Confirm Password</b> (minimum 6 characters).</li>
+<li seq="auto">Click <b>Create Account</b>.</li>
+<li seq="auto">When registration succeeds, return to Login and sign in with your new username and password.</li>
+</ol>
+
+<callout emoji="warning" background-color="light-yellow" border-color="orange" text-color="orange">
+<p>Usernames must be unique. If sign-up fails, try a different username or check that the database is available.</p>
+</callout>
+
+<hr/>
+
+<h1>4. Log In</h1>
+
+<ol>
+<li seq="auto">Enter your <b>Username</b> and <b>Password</b>.</li>
+<li seq="auto">Click <b>Login</b> (or press Enter).</li>
+<li seq="auto"><b>Regular users</b> are taken to the <b>Home Dashboard</b>.</li>
+<li seq="auto"><b>Admin users</b> are taken to the <b>Admin Console</b> (Power User Console).</li>
+</ol>
+
+<p><b>Default admin account (first install):</b> username <code>admin</code>, password <code>admin123</code>. You will be asked to change this password on first login.</p>
+
+<hr/>
+
+<h1>5. Home Dashboard (Regular Users)</h1>
+
+<p>After login, you land on the Home screen with two main options:</p>
+
+<table>
+<thead>
+<tr><th>Button</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><b>Chat &amp; Help</b></td><td>Open the AI chat interface to ask questions</td></tr>
+<tr><td><b>Info</b></td><td>View app version and capabilities (offline Ollama, local knowledge base)</td></tr>
+</tbody>
+</table>
+
+<p>Use <b>Logout</b> at the bottom to return to the Login screen.</p>
+
+<hr/>
+
+<h1>6. Chat with AI — Step by Step</h1>
+
+<h2>6.1 Open chat</h2>
+<ol>
+<li seq="auto">From Home, click <b>Open</b> on the <b>Chat &amp; Help</b> card.</li>
+<li seq="auto">The chat screen opens with a sidebar (left) and message area (right).</li>
+</ol>
+
+<h2>6.2 Ask a question</h2>
+<ol>
+<li seq="auto">Type your question in the box at the bottom (<b>Type a message...</b>).</li>
+<li seq="auto">Click <b>Send</b> or press <b>Enter</b>.</li>
+<li seq="auto">While the AI works, a status line shows progress: <i>Preparing</i> → <i>Searching knowledge base</i> → <i>Generating answer</i>.</li>
+<li seq="auto">The reply streams in word by word. Wait until generation finishes.</li>
+<li seq="auto">To cancel mid-reply, click <b>Stop</b>.</li>
+</ol>
+
+<h2>6.3 Use topic shortcuts (optional)</h2>
+<p>Above the input box, quick-topic buttons may appear (based on topics your admin configured). Use them to browse categories instead of typing from scratch.</p>
+<ol>
+<li seq="auto">Click a topic button to drill into sub-topics.</li>
+<li seq="auto">Use <b>Back</b> to return to the previous topic level.</li>
+</ol>
+
+<h2>6.4 Manage chat sessions</h2>
+<table>
+<thead>
+<tr><th>Action</th><th>How</th></tr>
+</thead>
+<tbody>
+<tr><td><b>Start fresh chat</b></td><td>Click <b>New Chat</b> in the left sidebar</td></tr>
+<tr><td><b>Resume old chat</b></td><td>Click a session under <b>Previous Chats</b></td></tr>
+<tr><td><b>Return to Home</b></td><td>Click <b>Home</b> in the sidebar</td></tr>
+<tr><td><b>Change theme</b></td><td>Use <b>Appearance</b> dropdown: Dark, Light, or System</td></tr>
+</tbody>
+</table>
+
+<h2>6.5 Understanding answers</h2>
+
+<callout emoji="check" background-color="light-green" border-color="green" text-color="green">
+<p>When the answer uses your uploaded documents, the reply ends with <b>Sources:</b> listing the PDF or manual entry name and relevance score.</p>
+</callout>
+
+<ul>
+<li><b>With Sources</b> — the AI found matching content in the knowledge base.</li>
+<li><b>Without Sources</b> — the AI answered from general knowledge (question may not match uploaded documents).</li>
+</ul>
+
+<hr/>
+
+<h1>7. Admin Console — Overview</h1>
+
+<p>Admins manage the knowledge base, topics, and system health. After admin login you see the <b>AI Command — Power User Console</b> with this sidebar:</p>
+
+<table>
+<thead>
+<tr><th>Menu</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><b>Dashboard</b></td><td>Stats: document count, topics, unanswered questions</td></tr>
+<tr><td><b>Topic Builder</b></td><td>Auto-generate topic buttons from PDF text using AI</td></tr>
+<tr><td><b>Manage Topic</b></td><td>Create, edit, or delete chat topic shortcuts manually</td></tr>
+<tr><td><b>Library</b></td><td>Upload PDFs, add manual entries, view and delete sources</td></tr>
+</tbody>
+</table>
+
+<p>Bottom of sidebar: <b>Appearance</b>, <b>Preview User Chat</b>, and <b>Logout</b>.</p>
+
+<hr/>
+
+<h1>8. Upload Documents (Admin — Library)</h1>
+
+<ol>
+<li seq="auto">Click <b>Library</b> in the admin sidebar.</li>
+<li seq="auto">Click <b>Upload PDF</b> and select a PDF file from your computer.</li>
+<li seq="auto">A progress window shows reading and embedding. Wait until it completes.</li>
+<li seq="auto">The document appears in <b>Uploaded Documents</b> with file name, size, and upload date.</li>
+<li seq="auto">Use the <b>Sort by</b> dropdown to reorder (default: <b>Newest first</b>).</li>
+</ol>
+
+<h2>Other Library actions</h2>
+<table>
+<thead>
+<tr><th>Button</th><th>Action</th></tr>
+</thead>
+<tbody>
+<tr><td><b>Add Manually</b></td><td>Type or paste text directly into the knowledge base (no PDF needed)</td></tr>
+<tr><td><b>View (eye icon)</b></td><td>Preview the stored text chunk for a source</td></tr>
+<tr><td><b>Delete (trash icon)</b></td><td>Remove one document from the knowledge base</td></tr>
+<tr><td><b>Clear All</b></td><td>Remove all uploaded sources (use with caution)</td></tr>
+<tr><td><b>Unanswered Questions</b></td><td>Review questions users asked that had no good document match</td></tr>
+</tbody>
+</table>
+
+<callout emoji="bulb" background-color="light-blue" border-color="blue" text-color="blue">
+<p><b>Tip:</b> After changing the embedding model or re-uploading PDFs, ask test questions in <b>Preview User Chat</b> to confirm answers include the expected Sources.</p>
+</callout>
+
+<hr/>
+
+<h1>9. Manage Topics (Admin)</h1>
+
+<h2>9.1 Topic Builder (automatic)</h2>
+<ol>
+<li seq="auto">Click <b>Topic Builder</b> in the sidebar.</li>
+<li seq="auto">Select a PDF source to analyze.</li>
+<li seq="auto">Run the builder; AI suggests main topics and sub-topics from the document.</li>
+<li seq="auto">Review and save topics so they appear as quick buttons in user chat.</li>
+</ol>
+
+<h2>9.2 Manage Topic (manual)</h2>
+<ol>
+<li seq="auto">Click <b>Manage Topic</b> in the sidebar.</li>
+<li seq="auto">Create a new main topic or sub-topic, or edit/delete existing ones.</li>
+<li seq="auto">Saved topics appear as shortcut buttons when users open Chat.</li>
+</ol>
+
+<hr/>
+
+<h1>10. Preview User Experience (Admin)</h1>
+
+<ol>
+<li seq="auto">In the admin sidebar, click <b>Preview User Chat</b>.</li>
+<li seq="auto">You see the same Home and Chat screens that regular users see.</li>
+<li seq="auto">Test questions against the current knowledge base.</li>
+<li seq="auto">Click <b>Back to Admin Console</b> to return to admin tools.</li>
+</ol>
+
+<hr/>
+
+<h1>11. Change Password</h1>
+
+<ol>
+<li seq="auto">On first admin login (or when <code>must_change_password</code> is set), a password change dialog appears automatically.</li>
+<li seq="auto">Enter your current password and a new password, then confirm.</li>
+<li seq="auto">Log in again with the new password.</li>
+</ol>
+
+<hr/>
+
+<h1>12. Troubleshooting</h1>
+
+<table>
+<thead>
+<tr><th>Problem</th><th>What to try</th></tr>
+</thead>
+<tbody>
+<tr><td><b>Database unavailable</b></td><td>Start MySQL; import <code>schema.sql</code>; check <code>DB_PASSWORD</code> in <code>.env</code></td></tr>
+<tr><td><b>Ollama / AI errors</b></td><td>Restart Ollama; confirm <code>llama3.2:3b</code> is pulled; keep model loaded with <code>OLLAMA_KEEP_ALIVE=30m</code></td></tr>
+<tr><td><b>Slow first reply</b></td><td>Normal on first question while the model loads; subsequent replies are faster</td></tr>
+<tr><td><b>Short or weak PDF answers</b></td><td>Re-upload PDFs; ask more specific questions; check Sources footer appears</td></tr>
+<tr><td><b>Scanned PDFs (images only)</b></td><td>Install OCR: <code>pip install -r requirements-ocr.txt</code>, Tesseract, and set <code>RAG_OCR_ENABLED=true</code></td></tr>
+<tr><td><b>Wrong login</b></td><td>Check username/password; admins go to Admin Console, users go to Home</td></tr>
+</tbody>
+</table>
+
+<hr/>
+
+<h1>13. Quick Reference</h1>
+
+<grid>
+<column width-ratio="0.5">
+<h2>End user flow</h2>
+<ol>
+<li seq="auto">Launch app → Login</li>
+<li seq="auto">Home → Chat &amp; Help</li>
+<li seq="auto">Type question → Send</li>
+<li seq="auto">Read answer + Sources</li>
+<li seq="auto">New Chat or Previous Chats as needed</li>
+</ol>
+</column>
+<column width-ratio="0.5">
+<h2>Admin flow</h2>
+<ol>
+<li seq="auto">Login as admin</li>
+<li seq="auto">Library → Upload PDF</li>
+<li seq="auto">Topic Builder / Manage Topic</li>
+<li seq="auto">Preview User Chat → test</li>
+<li seq="auto">Dashboard → monitor stats</li>
+</ol>
+</column>
+</grid>
+
+<callout emoji="pushpin" background-color="light-purple" border-color="purple" text-color="purple">
+<p><b>Version:</b> ChatOff AI v2.2 (Offline Edition) · Local Ollama · MySQL · PDF knowledge base (RAG)</p>
+</callout>

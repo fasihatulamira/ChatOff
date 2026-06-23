@@ -1,0 +1,32 @@
+﻿ChatOff AI v2.2 — Post-Install Setup
+=====================================
+
+Quick start
+-----------
+1. MySQL: import schema.sql into chatdb (see README.md)
+2. Copy .env.example to .env and set DB_PASSWORD
+3. Keep Ollama running; pull models:
+     ollama pull llama3.2:3b
+     ollama pull nomic-embed-text
+4. Run: python app.py
+5. Login admin/admin123 (forced password change on first login)
+
+Developer commands
+------------------
+  python test.py              — quick import test
+  python system_test.py       — full smoke test
+  python release_check.py     — pre-release checks
+  python benchmark_ollama.py  — performance benchmark
+  .\build.ps1                 — rebuild exe + installer
+  QA_CHECKLIST.txt            — manual test walkthrough
+
+Optional — scanned PDF OCR
+--------------------------
+  pip install -r requirements-ocr.txt
+  Install Tesseract OCR for Windows
+  Set RAG_OCR_ENABLED=true in .env
+
+Optional — keep model loaded between questions
+----------------------------------------------
+  setx OLLAMA_KEEP_ALIVE "30m"
+  (restart Ollama after setting)

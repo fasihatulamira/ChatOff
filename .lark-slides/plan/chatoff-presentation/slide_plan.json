@@ -1,0 +1,25 @@
+{
+  "deck_id": "chatoff-presentation",
+  "title": "ChatOff AI - Offline Knowledge Assistant",
+  "audience": "Supervisor / company stakeholders",
+  "visual_theme": {
+    "primary": "#0097A7",
+    "accent": "#8E24AA",
+    "dark": "#0F172A",
+    "light": "#F8FAFC"
+  },
+  "slides": [
+    {"page": 1, "layout_type": "cover", "key_message": "ChatOff AI v2.2", "visual_focus": "gradient + robot icon"},
+    {"page": 2, "layout_type": "agenda", "key_message": "Presentation outline", "visual_focus": "numbered list"},
+    {"page": 3, "layout_type": "problem", "key_message": "Offline knowledge gaps", "visual_focus": "pain point cards"},
+    {"page": 4, "layout_type": "objectives", "key_message": "Project goals", "visual_focus": "icon row"},
+    {"page": 5, "layout_type": "solution", "key_message": "RAG + offline AI", "visual_focus": "architecture blocks"},
+    {"page": 6, "layout_type": "usecase", "key_message": "Actors and use cases", "visual_focus": "mermaid use case style diagram"},
+    {"page": 7, "layout_type": "tech", "key_message": "Technology stack", "visual_focus": "2x3 icon grid"},
+    {"page": 8, "layout_type": "workflow", "key_message": "Question to answer flow", "visual_focus": "mermaid flowchart"},
+    {"page": 9, "layout_type": "database", "key_message": "MySQL + JSON storage", "visual_focus": "ER table layout"},
+    {"page": 10, "layout_type": "features", "key_message": "User and admin capabilities", "visual_focus": "dual column"},
+    {"page": 11, "layout_type": "limitations", "key_message": "Constraints and roadmap", "visual_focus": "comparison cards"},
+    {"page": 12, "layout_type": "closing", "key_message": "Thank you", "visual_focus": "gradient + CTA"}
+  ]
+}

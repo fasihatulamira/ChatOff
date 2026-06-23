@@ -5,7 +5,7 @@
 
 import customtkinter as ctk
 from tkinter import messagebox
-from auth import login_user, register_user
+from auth import login_user, register_user, check_database
 
 
 # ─────────────────────────────────────────────
@@ -74,6 +74,10 @@ class SignUpFrame(ctk.CTkFrame):
 
     # ── Submit handler ──────────────────────────
     def _submit(self):
+        if not self.controller.db_ok:
+            self._show_error(f"Database unavailable: {self.controller.db_error}")
+            return
+
         full_name = self.full_name_entry.get().strip()
         username  = self.username_entry.get().strip()
         email     = self.email_entry.get().strip()
@@ -151,13 +155,18 @@ class LoginFrame(ctk.CTkFrame):
 
     # ── Login handler ────────────────────────────
     def _login(self):
+        if not self.controller.db_ok:
+            self._show_error(f"Database unavailable: {self.controller.db_error}")
+            return
+
         username = self.username_entry.get().strip()
         password = self.password_entry.get()
 
         ok, result = login_user(username, password)
         if ok:
-            self.controller.logged_in_user     = result    # result is full_name on success
-            self.controller.logged_in_username = username  # keep the login handle for DB lookups
+            self.controller.logged_in_user = result["full_name"]
+            self.controller.logged_in_username = username
+            self.controller.must_change_password = result.get("must_change_password", False)
             self.controller._launch_chatbot()
         else:
             self._show_error(f"⚠  {result}")
@@ -193,6 +202,7 @@ class LoginWindow(ctk.CTk):
 
         self.logged_in_user: str = ""
         self.logged_in_username: str = ""
+        self.must_change_password: bool = False
 
         # ── Hero / branding section (persistent) ──────────────
         hero = ctk.CTkFrame(self, corner_radius=0, fg_color=("#1565C0", "#0D1B2A"))
@@ -204,6 +214,19 @@ class LoginWindow(ctk.CTk):
         ctk.CTkLabel(hero, text="Your offline AI companion",
                      font=ctk.CTkFont(size=14),
                      text_color="#90CAF9").pack(pady=(0, 16))
+
+        self.db_ok, self.db_error = check_database()
+        if not self.db_ok:
+            db_banner = ctk.CTkFrame(self, corner_radius=8, fg_color=("#FFEBEE", "#3C1F22"))
+            db_banner.pack(fill="x", padx=24, pady=(0, 8))
+            ctk.CTkLabel(
+                db_banner,
+                text=f"Database unavailable: {self.db_error}",
+                font=ctk.CTkFont(size=12),
+                text_color=("#C62828", "#EF9A9A"),
+                wraplength=420,
+                justify="left",
+            ).pack(padx=12, pady=10, anchor="w")
 
         # ── Frame Container ────────────────────────────
         self.container = ctk.CTkFrame(self, corner_radius=16)

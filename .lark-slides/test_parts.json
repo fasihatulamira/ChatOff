@@ -1,0 +1,1 @@
+[{"action": "block_replace", "block_id": "bvg", "replacement": "<whiteboard topLeftX=\"30\" topLeftY=\"100\" width=\"900\" height=\"420\"><mermaid><![CDATA[\nflowchart TD\n    A[User] --> B[ChatOff App]\n    B --> C[Ollama LLM]\n    B --> D[MySQL]\n]]></mermaid></whiteboard>"}]

@@ -1,6 +1,6 @@
 
-# AUTHENTICATION + CHAT HISTORY + KNOWLEDGE BASE
-# Handles user auth, chat history, and the knowledge base (option table) in MySQL (chatdb).
+# AUTHENTICATION + CHAT HISTORY
+# Handles user auth and chat history in MySQL (chatdb).
 
 import os
 import uuid
@@ -42,7 +42,7 @@ def test_db_connection(host, user, password, database) -> tuple[bool, str]:
         return False, str(e)
 
 
-_REQUIRED_TABLES = ("users", "chat_history", "chat_topics", "option")
+_REQUIRED_TABLES = ("users", "chat_history", "chat_topics")
 
 
 def check_database() -> tuple[bool, str]:
@@ -103,6 +103,11 @@ def ensure_schema() -> None:
                     "MODIFY response_text MEDIUMTEXT NOT NULL"
                 )
                 conn.commit()
+
+        cursor.execute("SHOW TABLES LIKE 'option'")
+        if cursor.fetchone():
+            cursor.execute("DROP TABLE `option`")
+            conn.commit()
 
         cursor.close()
         conn.close()
@@ -262,97 +267,6 @@ def change_password(username: str, current_password: str, new_password: str) -> 
 
     except Error as e:
         return False, f"Database error: {e}"
-
-
-# ─────────────────────────────────────────────
-#  Knowledge Base API  (option table)
-# ─────────────────────────────────────────────
-def add_knowledge(title: str, content: str) -> tuple[bool, str]:
-    """
-    Add a new knowledge base entry.
-    Returns (True, "success") or (False, error_message).
-    """
-    if not title.strip() or not content.strip():
-        return False, "Title and content are required."
-
-    try:
-        conn = _get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO `option` (title, content) VALUES (%s, %s)",
-            (title.strip(), content.strip())
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return True, "success"
-
-    except Error as e:
-        return False, f"Database error: {e}"
-
-
-def get_all_knowledge() -> list[dict]:
-    """
-    Return all knowledge base entries as a list of dicts:
-    { id, title, content, created_at }
-    """
-    try:
-        conn = _get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT id, title, content, created_at FROM `option` ORDER BY created_at DESC"
-        )
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return rows
-
-    except Error:
-        return []
-
-
-def delete_knowledge(entry_id: int) -> None:
-    """Delete a knowledge base entry by its id."""
-    try:
-        conn = _get_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM `option` WHERE id = %s", (entry_id,))
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-    except Error:
-        pass
-
-
-def clear_knowledge() -> None:
-    """Delete all entries from the knowledge base."""
-    try:
-        conn = _get_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM `option`")
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-    except Error:
-        pass
-
-
-def build_system_prompt() -> str:
-    """
-    Build a system prompt string from all knowledge base entries.
-    Returns empty string if no entries exist.
-    """
-    entries = get_all_knowledge()
-    if not entries:
-        return ""
-
-    parts = ["You are a helpful AI assistant. Use the following knowledge base to answer accurately:\n"]
-    for entry in reversed(entries):   # oldest first = higher priority
-        parts.append(f"### {entry['title']}\n{entry['content']}\n")
-
-    return "\n".join(parts)
 
 
 # ─────────────────────────────────────────────

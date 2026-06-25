@@ -39,10 +39,4 @@ CREATE TABLE IF NOT EXISTS chat_topics (
         FOREIGN KEY (parent_id) REFERENCES chat_topics(id) ON DELETE CASCADE
 );
 
--- Legacy knowledge table (kept for compatibility with auth.py helpers)
-CREATE TABLE IF NOT EXISTS `option` (
-    id         INT AUTO_INCREMENT PRIMARY KEY,
-    title      VARCHAR(255) NOT NULL,
-    content    TEXT         NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+

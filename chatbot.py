@@ -100,10 +100,10 @@ def _ollama_num_ctx(is_rag: bool) -> int | None:
 def _ollama_options(num_predict_override: int | None = None, is_rag: bool = False) -> dict:
     options = {}
     try:
-        default_predict = int(os.getenv("OLLAMA_NUM_PREDICT", "768"))
+        default_predict = int(os.getenv("OLLAMA_NUM_PREDICT", "1280"))
         options["num_predict"] = num_predict_override if num_predict_override is not None else default_predict
     except ValueError:
-        options["num_predict"] = num_predict_override or 768
+        options["num_predict"] = num_predict_override or 1280
     num_ctx = _ollama_num_ctx(is_rag)
     if num_ctx is not None:
         options["num_ctx"] = num_ctx
@@ -138,13 +138,13 @@ def _ollama_options(num_predict_override: int | None = None, is_rag: bool = Fals
 def rag_num_predict(prompt: str = "") -> int:
     """Token budget for RAG answers — longer for overview/list-style PDF questions."""
     try:
-        rag_predict = int(os.getenv("OLLAMA_RAG_NUM_PREDICT", "1280"))
+        rag_predict = int(os.getenv("OLLAMA_RAG_NUM_PREDICT", "2048"))
     except ValueError:
-        rag_predict = 1280
+        rag_predict = 2048
     try:
-        default_predict = int(os.getenv("OLLAMA_NUM_PREDICT", "768"))
+        default_predict = int(os.getenv("OLLAMA_NUM_PREDICT", "1280"))
     except ValueError:
-        default_predict = 768
+        default_predict = 1280
     base = max(rag_predict, default_predict)
 
     if prompt:
@@ -152,9 +152,9 @@ def rag_num_predict(prompt: str = "") -> int:
 
         if needs_long_rag_answer(prompt):
             try:
-                long_predict = int(os.getenv("OLLAMA_LIST_NUM_PREDICT", "2048"))
+                long_predict = int(os.getenv("OLLAMA_LIST_NUM_PREDICT", "3072"))
             except ValueError:
-                long_predict = 2048
+                long_predict = 3072
             return max(base, long_predict)
     return base
 
@@ -317,7 +317,7 @@ def get_response(
         lang_instruction = _build_language_instruction(prompt)
         combined_system = (
             f"{lang_instruction}\n\n"
-            "You are a helpful AI assistant. Answer clearly and accurately."
+            "You are a helpful AI assistant. Give thorough, detailed answers with clear explanations and examples when helpful."
         )
 
     messages = [

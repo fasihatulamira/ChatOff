@@ -188,45 +188,69 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
             
         self.status_label.configure(text="AI is analyzing and building...", text_color="#E040FB")
         self.publish_btn.configure(state="disabled")
-        
+
+        self._gen_cancel_event = threading.Event()
+
+        def on_cancel():
+            self._gen_cancel_event.set()
+            self.status_label.configure(text="Generation cancelled.", text_color="orange")
+            self.publish_btn.configure(state="normal")
+            self.processing_win = None
+
         self.processing_win = ProcessingWindow(
-            self, 
-            title="AI Topic Builder", 
-            message="AI is analyzing content & building sub-topics..."
+            self,
+            title="AI Topic Builder",
+            message="AI is analyzing content & building sub-topics...",
+            on_cancel=on_cancel,
         )
-        
+        current_win = self.processing_win
+
         def task():
             prompt = (
                 f"You are an AI that structures conversation topics.\n"
                 f"The user is creating a main topic called '{topic_name}'.\n"
                 f"Based on the following content, extract the logical sub-topics.\n"
-                f"For each sub-topic, write a helpful reply message that the bot should say when the user clicks it.\n"
+                f"For each sub-topic, write a detailed reply message (3–6 sentences) that fully explains the topic, "
+                f"highlights key points from the content, and guides the user on what they can ask next.\n"
                 f"Respond ONLY with a valid JSON array like [{{\"topic_name\": \"...\", \"reply_message\": \"...\"}}]. "
                 f"Do not write any markdown code blocks or extra text.\n\n"
                 f"Content: {content}"
             )
-            
+
             try:
+                if self._gen_cancel_event.is_set() or current_win is None or current_win.is_cancelled:
+                    return
+
                 model_name = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
                 last_error = None
                 subtopics = None
                 for attempt in range(2):
+                    if self._gen_cancel_event.is_set() or current_win is None or current_win.is_cancelled:
+                        return
                     try:
                         gen = get_response(
                             prompt,
                             model_name,
                             system_prompt="You only output raw JSON arrays.",
                             json_mode=True,
+                            cancel_event=self._gen_cancel_event,
                         )
                         ai_output = "".join(list(gen)).strip()
+                        if self._gen_cancel_event.is_set() or current_win is None or current_win.is_cancelled:
+                            return
                         subtopics = parse_json_array(ai_output)
                         break
                     except Exception as e:
                         last_error = e
+                        if self._gen_cancel_event.is_set() or current_win is None or current_win.is_cancelled:
+                            return
                         if attempt == 0:
                             time.sleep(2)
                             continue
                         raise
+
+                if self._gen_cancel_event.is_set() or current_win is None or current_win.is_cancelled:
+                    return
 
                 if not subtopics:
                     raise last_error or ValueError("Failed to generate sub-topics.")
@@ -234,10 +258,12 @@ class EmbeddedAIBuilderFrame(ctk.CTkFrame):
                 self.generated_subtopics = subtopics
                 self.main_topic_name = topic_name
                 self.after(0, self._on_success)
-                
+
             except Exception as e:
+                if self._gen_cancel_event.is_set() or current_win is None or current_win.is_cancelled:
+                    return
                 self.after(0, lambda e=e: self._on_fail(str(e)))
-                
+
         threading.Thread(target=task, daemon=True).start()
         
     def _on_success(self):

@@ -146,9 +146,25 @@ def _is_list_style_question(prompt: str) -> bool:
     return any(re.search(p, lower) for p in patterns)
 
 
+def _is_explanatory_question(prompt: str) -> bool:
+    """User asks for explanation, description, or deeper detail."""
+    lower = prompt.lower()
+    patterns = [
+        r"\bexplain\b", r"\bdescribe\b", r"\bdetail", r"\bwhy\b", r"\bhow\b",
+        r"\bwhat is\b", r"\btell me about\b", r"\belaborate\b",
+        r"\bterangkan\b", r"\bjelaskan\b", r"\bhuraikan\b", r"\bkenapa\b",
+        r"\bbagaimana\b", r"\bapa itu\b", r"\bceritakan\b",
+    ]
+    return any(re.search(p, lower) for p in patterns)
+
+
 def needs_long_rag_answer(prompt: str) -> bool:
-    """Broad or list-style questions need more tokens and more PDF chunks."""
-    return _is_list_style_question(prompt) or _is_pdf_meta_question(prompt)
+    """Broad, list-style, or explanatory questions need more tokens and more PDF chunks."""
+    return (
+        _is_list_style_question(prompt)
+        or _is_pdf_meta_question(prompt)
+        or _is_explanatory_question(prompt)
+    )
 
 
 def _adaptive_top_k(prompt: str, base_top_k: int) -> int:
@@ -253,7 +269,8 @@ def _rag_instruction_block(user_prompt: str, context: str) -> str:
             "JANGAN minta pengguna memuat naik fail atau menampal teks. "
             "Jawab soalan HANYA berdasarkan konteks dokumen di bawah. "
             "Jawab dalam Bahasa Malaysia yang jelas (bukan Indonesia): gunakan mempunyai, keupayaan, anda. "
-            "Beri jawapan ringkas, tepat, dan berstruktur; gunakan bullet point jika perlu. "
+            "Beri jawapan yang LENGKAP, TERPERINCI, dan berstruktur — jelaskan konsep, langkah, dan contoh jika ada dalam konteks. "
+            "Gunakan perenggan dan bullet point jika sesuai; elakkan jawapan satu ayat sahaja. "
             "Jangan ulang ayat atau perkataan yang sama. Jangan campur bahasa lain."
             f"{completeness}{meta} "
             "Jika jawapan tiada dalam konteks, nyatakan dengan jelas perkara yang tiada."
@@ -264,7 +281,8 @@ def _rag_instruction_block(user_prompt: str, context: str) -> str:
         "NEVER tell the user you cannot read PDFs, files, or documents. "
         "NEVER ask the user to upload files or paste text. "
         "Answer ONLY using the document context below. "
-        "Be clear and structured; use bullet points when listing items. Do not repeat sentences."
+        "Give COMPLETE, DETAILED, and well-structured answers — explain concepts, steps, and examples when present in the context. "
+        "Use paragraphs and bullet points where helpful; avoid one-sentence replies. Do not repeat sentences."
         f"{completeness}{meta} "
         "If the answer is not in the context, say clearly what is missing."
     )
